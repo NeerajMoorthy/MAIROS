@@ -1,0 +1,234 @@
+{
+  "test_case_id": "E2E-01",
+  "purpose": "Deterministic create-project, upload, background-analysis, retrieval-evaluation, and project-deletion test using an offline controlled PDF.",
+  "project": {
+    "name": "RAG evaluation smoke test",
+    "description": "End-to-end retrieval and evaluation check"
+  },
+  "upload": {
+    "file": "output/pdf/e2e-rag-evaluation-source.pdf",
+    "mime_type": "application/pdf",
+    "sha256": "b5ae9cd5a2acb530b6bfa0efb29c06dc9e83e5b8a4e8ba5aa117c401b2ecd7f2",
+    "expected_pages": 10,
+    "expected_minimum_chunks": 10,
+    "chunking": {
+      "algorithm": "RecursiveChunker",
+      "chunk_size_characters": 512,
+      "overlap_characters": 64
+    }
+  },
+  "task": {
+    "request": "Analyse uploaded document: e2e-rag-evaluation-source.pdf",
+    "flow": "analyze",
+    "expected_agent_stages": [
+      "Loader",
+      "Analysis",
+      "Knowledge Graph",
+      "Citation"
+    ],
+    "note": "PDF extraction, chunking, and indexing finish synchronously before the analysis task starts. Analysis and later agent stages depend on the configured model provider. A provider failure must not remove the indexed document or prevent retrieval evaluation."
+  },
+  "evaluation": {
+    "k": 5,
+    "expected_cases_total": 10,
+    "expected_cases_evaluated": 10,
+    "expected_cases_unsupported": 0,
+    "required_aggregate_metric_keys": [
+      "recall_at_5",
+      "precision_at_5",
+      "mrr",
+      "ndcg_at_5"
+    ],
+    "metric_range": [
+      0,
+      1
+    ],
+    "metric_exact_values": "Not fixed: retrieval ranking depends on the configured embedding model and vector store.",
+    "answer_quality": "Expected unavailable: this retrieval evaluation does not provide answer_fn, so no generated answer is sent to an LLM judge.",
+    "relevance_policy": "A corpus chunk is relevant when its normalized text contains every required_entities term from the golden case."
+  },
+  "golden_cases": [
+    {
+      "id": "rag-001",
+      "question": "How does retrieval-augmented generation reduce hallucination?",
+      "expected_answer": "Retrieving relevant passages before generating grounds the answer in source text, so the model states what the corpus supports instead of inventing facts.",
+      "source_documents": [],
+      "required_entities": [
+        "retrieval",
+        "hallucination"
+      ],
+      "difficulty": "single-hop",
+      "tags": [
+        "rag",
+        "grounding"
+      ],
+      "evidence_page": 1,
+      "evidence_heading": "RAG-001: Retrieval and hallucination",
+      "evidence_text": "Retrieval-augmented generation reduces hallucination by retrieving relevant passages before an answer is generated. The retrieved evidence constrains the answer to what the source supports instead of encouraging unsupported claims."
+    },
+    {
+      "id": "rag-002",
+      "question": "What role does dense vector similarity search play in retrieval?",
+      "expected_answer": "Dense vector similarity search over an embedding index selects the passages most semantically similar to the question before generation.",
+      "source_documents": [],
+      "required_entities": [
+        "dense",
+        "similarity"
+      ],
+      "difficulty": "single-hop",
+      "tags": [
+        "rag",
+        "retrieval"
+      ],
+      "evidence_page": 2,
+      "evidence_heading": "RAG-002: Dense similarity retrieval",
+      "evidence_text": "Dense vector representations support similarity search over an embedding index. Similarity ranking selects passages whose meaning is close to the question before generation begins."
+    },
+    {
+      "id": "rag-003",
+      "question": "How does grounding an answer in external knowledge improve factual accuracy?",
+      "expected_answer": "Grounding conditions generation on retrieved external knowledge, which improves factual accuracy relative to relying on parameters alone.",
+      "source_documents": [],
+      "required_entities": [
+        "external knowledge",
+        "factual"
+      ],
+      "difficulty": "multi-hop",
+      "tags": [
+        "rag",
+        "factuality"
+      ],
+      "evidence_page": 3,
+      "evidence_heading": "RAG-003: Grounding in external knowledge",
+      "evidence_text": "Grounding an answer in external knowledge improves factual accuracy because generation can rely on retrieved evidence rather than model parameters alone. External knowledge makes factual statements traceable to a source."
+    },
+    {
+      "id": "tf-001",
+      "question": "How does self-attention let a transformer process a sequence in parallel?",
+      "expected_answer": "Self-attention scores all positions against each other at once, removing the sequential dependency that recurrence imposes.",
+      "source_documents": [],
+      "required_entities": [
+        "self attention",
+        "parallel"
+      ],
+      "difficulty": "single-hop",
+      "tags": [
+        "transformers",
+        "architecture"
+      ],
+      "evidence_page": 4,
+      "evidence_heading": "TF-001: Parallel self attention",
+      "evidence_text": "Self attention compares token positions together, so a transformer can process a sequence in parallel. This removes the sequential dependency imposed by recurrent processing."
+    },
+    {
+      "id": "tf-002",
+      "question": "What does the transformer architecture replace recurrence with?",
+      "expected_answer": "It replaces recurrent computation with attention over the whole sequence.",
+      "source_documents": [],
+      "required_entities": [
+        "recurrent",
+        "transformer"
+      ],
+      "difficulty": "single-hop",
+      "tags": [
+        "transformers",
+        "architecture"
+      ],
+      "evidence_page": 5,
+      "evidence_heading": "TF-002: Transformer versus recurrent computation",
+      "evidence_text": "The transformer architecture replaces recurrent computation with attention over the whole sequence. A recurrent network processes positions in order, while a transformer can attend across positions directly."
+    },
+    {
+      "id": "tf-003",
+      "question": "What are the query, key, and value projections used for?",
+      "expected_answer": "Each token is projected into query, key, and value vectors so attention can weigh how relevant every other position is.",
+      "source_documents": [],
+      "required_entities": [
+        "query",
+        "value"
+      ],
+      "difficulty": "single-hop",
+      "tags": [
+        "transformers",
+        "attention"
+      ],
+      "evidence_page": 6,
+      "evidence_heading": "TF-003: Query, key, and value projections",
+      "evidence_text": "Each token is projected into query, key, and value vectors. A query compares with keys to find relevant positions, and the resulting weights combine the corresponding value vectors."
+    },
+    {
+      "id": "cmp-001",
+      "question": "How does a transformer differ from a recurrent neural network in training speed?",
+      "expected_answer": "Transformers avoid sequential computation, which enables substantially faster training on parallel hardware than recurrent networks allow.",
+      "source_documents": [],
+      "required_entities": [
+        "recurrent",
+        "training"
+      ],
+      "difficulty": "comparison",
+      "tags": [
+        "transformers",
+        "efficiency"
+      ],
+      "evidence_page": 7,
+      "evidence_heading": "CMP-001: Training efficiency",
+      "evidence_text": "A transformer avoids the recurrent dependency that limits parallel hardware use. Compared with recurrent neural networks, this enables faster training when many sequence positions are processed concurrently."
+    },
+    {
+      "id": "cmp-002",
+      "question": "Where do retrieval-based and purely parametric approaches differ?",
+      "expected_answer": "Retrieval-based systems consult an external corpus at inference time, while parametric models answer only from weights learned during training.",
+      "source_documents": [],
+      "required_entities": [
+        "retrieval",
+        "language model"
+      ],
+      "difficulty": "comparison",
+      "tags": [
+        "rag",
+        "comparison"
+      ],
+      "evidence_page": 8,
+      "evidence_heading": "CMP-002: Retrieval and language models",
+      "evidence_text": "A retrieval-based language model consults an external corpus at inference time. A purely parametric language model instead answers from weights learned during training without retrieval from that corpus."
+    },
+    {
+      "id": "kg-001",
+      "question": "How can a knowledge graph support a retrieval pipeline?",
+      "expected_answer": "Graph traversal surfaces related entities whose passages a purely lexical or dense match would miss, which can be fused with vector hits.",
+      "source_documents": [],
+      "required_entities": [
+        "knowledge"
+      ],
+      "difficulty": "multi-hop",
+      "tags": [
+        "knowledge-graph",
+        "retrieval"
+      ],
+      "evidence_page": 9,
+      "evidence_heading": "KG-001: Knowledge graph support",
+      "evidence_text": "A knowledge graph connects related entities and concepts. In a retrieval pipeline, graph traversal can surface related evidence that a dense or lexical match did not retrieve."
+    },
+    {
+      "id": "chk-001",
+      "question": "Why is a document split into chunks before it is embedded?",
+      "expected_answer": "Chunking keeps each embedded unit small enough to be specific, so retrieval returns the passage that answers the question rather than a whole document.",
+      "source_documents": [],
+      "required_entities": [
+        "passages"
+      ],
+      "difficulty": "single-hop",
+      "tags": [
+        "ingestion",
+        "chunking"
+      ],
+      "evidence_page": 10,
+      "evidence_heading": "CHK-001: Chunking documents",
+      "evidence_text": "A document is split into small passages before embedding. Focused passages let retrieval return the specific evidence needed for a question instead of an entire document."
+    }
+  ],
+  "cleanup": {
+    "action": "Delete the test project from the Projects page and confirm.",
+    "expected": "The project card disappears and project-scoped documents, chunks, graph data, papers, and task history are removed."
+  }
+}

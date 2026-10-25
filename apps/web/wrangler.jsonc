@@ -1,0 +1,31 @@
+// Cloudflare Workers deployment of the MAIROS frontend (Next.js via OpenNext).
+//
+//   npm run cf:deploy
+//
+// Secrets (never in this file):
+//   npx wrangler secret put BETTER_AUTH_SECRET
+//   npx wrangler secret put DATABASE_URL          # Supabase pooler URL
+//   npx wrangler secret put GITHUB_CLIENT_SECRET   # optional
+//
+// Build-time variables (in the shell or CI that runs `cf:build`, because
+// Next.js inlines them):  MAIROS_API_URL, NEXT_PUBLIC_AUTH_ENABLED,
+// NEXT_PUBLIC_GA_MEASUREMENT_ID, NEXT_PUBLIC_AUTH_SOCIAL.
+// See docs/DEPLOYMENT.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mairos-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  // `pg` (Better Auth's Supabase connection) needs the Node.js APIs.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // Runtime-only server variables. NEXT_PUBLIC_* values do NOT belong here:
+  // Next.js inlines them at build time, so setting them here changes nothing.
+  "vars": {
+    "BETTER_AUTH_URL": "https://mairos.example.com"
+  }
+}

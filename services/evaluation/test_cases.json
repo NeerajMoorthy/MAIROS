@@ -1,0 +1,31 @@
+{
+  "test_cases": [
+    {
+      "id": "q001",
+      "question": "How does transformer self-attention differ from RNN-based attention mechanisms?",
+      "expected_answer": "Transformer self-attention computes attention weights in parallel across all positions, while RNN-based attention is sequential. Self-attention uses query, key, and value projections to allow each token to attend to every other token simultaneously, enabling better parallelization and capturing long-range dependencies more effectively.",
+      "source_documents": ["vaswani2017.pdf", "bahdanau2015.pdf"],
+      "required_entities": ["Transformer", "Self-Attention", "RNN", "Attention"],
+      "difficulty": "multi-hop",
+      "tags": ["architecture", "attention", "comparison"]
+    },
+    {
+      "id": "q002",
+      "question": "What are the key advantages of retrieval-augmented generation over purely generative models?",
+      "expected_answer": "RAG reduces hallucination by grounding responses in retrieved evidence, enables knowledge updates without retraining, provides source attribution for claims, and generally improves factual accuracy on knowledge-intensive tasks.",
+      "source_documents": ["lewis2020.pdf"],
+      "required_entities": ["RAG", "Retrieval-Augmented Generation", "LLM"],
+      "difficulty": "single-hop",
+      "tags": ["rag", "generation"]
+    },
+    {
+      "id": "q003",
+      "question": "Compare the effectiveness of dense retrieval versus sparse retrieval for scientific literature search.",
+      "expected_answer": "Dense retrieval using learned embeddings captures semantic similarity and handles paraphrases well, while sparse retrieval (e.g., BM25) excels at exact term matching. Hybrid approaches that combine both typically outperform either method alone on scientific literature.",
+      "source_documents": ["karpukhin2020.pdf", "robertson2009.pdf"],
+      "required_entities": ["Dense Retrieval", "Sparse Retrieval", "BM25", "Embedding"],
+      "difficulty": "comparison",
+      "tags": ["retrieval", "comparison"]
+    }
+  ]
+}

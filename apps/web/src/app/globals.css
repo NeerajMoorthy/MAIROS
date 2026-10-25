@@ -1,0 +1,255 @@
+@import "tailwindcss";
+
+/* Tailwind v4 is configured in CSS, not in tailwind.config.ts.
+   These tokens are the shadcn/ui contract — components reference
+   bg-background, text-muted-foreground, border-border, and so on. */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.65rem;
+
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.16 0.01 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.01 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0.01 265);
+  --primary: oklch(0.55 0.19 259);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.005 265);
+  --secondary-foreground: oklch(0.25 0.02 265);
+  --muted: oklch(0.96 0.005 265);
+  --muted-foreground: oklch(0.53 0.02 265);
+  --accent: oklch(0.95 0.02 259);
+  --accent-foreground: oklch(0.3 0.06 259);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  /* Darkened from 0.62/0.72 to reach WCAG AA. The old values gave 3.31:1 for
+     `text-success` and 2.49:1 for the warning icon against the page — both
+     below the 4.5:1 small-text threshold, and the warning below even the 3:1
+     non-text threshold. Hue and chroma are unchanged. */
+  --success: oklch(0.54 0.15 152);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.62 0.16 70);
+  --warning-foreground: oklch(0.2 0.03 70);
+  --border: oklch(0.91 0.005 265);
+  --input: oklch(0.91 0.005 265);
+  --ring: oklch(0.55 0.19 259);
+
+  --black-iris: #080813;
+  --frozen: #A0BDDB;
+  --black-iris-rgb: 8 8 19;
+  --frozen-rgb: 160 189 219;
+
+  --sidebar: oklch(0.98 0.003 265);
+  --sidebar-foreground: oklch(0.16 0.01 265);
+  --sidebar-border: oklch(0.91 0.005 265);
+  --sidebar-accent: oklch(0.95 0.01 265);
+  --sidebar-accent-foreground: oklch(0.2 0.02 265);
+}
+
+.dark {
+  --background: oklch(0.16 0.012 265);
+  --foreground: oklch(0.97 0.002 265);
+  --card: oklch(0.21 0.014 265);
+  --card-foreground: oklch(0.97 0.002 265);
+  --popover: oklch(0.21 0.014 265);
+  --popover-foreground: oklch(0.97 0.002 265);
+  --primary: oklch(0.7 0.15 255);
+  --primary-foreground: oklch(0.18 0.02 265);
+  --secondary: oklch(0.27 0.015 265);
+  --secondary-foreground: oklch(0.97 0.002 265);
+  --muted: oklch(0.27 0.015 265);
+  --muted-foreground: oklch(0.71 0.015 265);
+  --accent: oklch(0.3 0.03 259);
+  --accent-foreground: oklch(0.95 0.01 259);
+  --destructive: oklch(0.65 0.19 25);
+  /* Was near-white, which read at 3.34:1 on the destructive badge. `--destructive`
+     itself is left alone because it doubles as text on the page background,
+     where it already passes; only the on-badge foreground moves. */
+  --destructive-foreground: oklch(0.2 0.03 25);
+  --success: oklch(0.7 0.14 152);
+  --success-foreground: oklch(0.18 0.02 265);
+  --warning: oklch(0.78 0.15 70);
+  --warning-foreground: oklch(0.18 0.03 70);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.6 0.13 255);
+
+  --black-iris: #080813;
+  --frozen: #A0BDDB;
+  --black-iris-rgb: 8 8 19;
+  --frozen-rgb: 160 189 219;
+
+  --sidebar: oklch(0.19 0.013 265);
+  --sidebar-foreground: oklch(0.97 0.002 265);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.27 0.015 265);
+  --sidebar-accent-foreground: oklch(0.97 0.002 265);
+}
+
+@theme inline {
+  --color-black-iris: #080813;
+  --color-frozen: #A0BDDB;
+  --color-frozen-glow: rgba(160, 189, 219, 0.16);
+  --color-frozen-border: rgba(160, 189, 219, 0.28);
+  --color-black-iris-card: rgba(8, 8, 19, 0.85);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Animations used by the Radix-based components. */
+@keyframes mairos-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mairos-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mairos-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-in-panel {
+  animation: mairos-in 160ms ease-out;
+}
+
+.animate-overlay {
+  animation: mairos-overlay-in 160ms ease-out;
+}
+
+.animate-pulse-dot {
+  animation: mairos-pulse 1.2s ease-in-out infinite;
+}
+
+/*
+ * Focus ring for interactive elements that are not the shared <Button>.
+ * Several panels use a bare <button> for a disclosure toggle or a list row;
+ * those are keyboard-reachable but had no visible focus indicator, which is a
+ * WCAG 2.4.7 failure. Applying `.focus-ring` gives them the same ring the
+ * design system already uses, without changing their resting appearance.
+ */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--ring);
+  border-radius: var(--radius-md);
+}
+
+/*
+ * Respect a reduced-motion preference: the panel, overlay and pulse animations
+ * are decorative, and the status dot in particular pulses indefinitely.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in-panel,
+  .animate-overlay,
+  .animate-pulse-dot {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* Black Iris and Frozen custom utilities */
+.bg-black-iris {
+  background-color: var(--black-iris);
+}
+
+.text-frozen {
+  color: var(--frozen);
+}
+
+.border-frozen {
+  border-color: rgba(160, 189, 219, 0.25);
+}
+
+.glow-frozen {
+  box-shadow: 0 0 25px rgba(160, 189, 219, 0.16);
+}
+
+.glow-frozen-subtle {
+  box-shadow: 0 0 15px rgba(160, 189, 219, 0.08);
+}
+

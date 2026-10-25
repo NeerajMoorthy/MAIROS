@@ -1,0 +1,99 @@
+{
+  "name": "MAIROS core retrieval golden set",
+  "version": 1,
+  "domain": "retrieval-augmented generation and transformer literature",
+  "relevance_policy": "term_match",
+  "notes": "Curated by hand for the demo corpus (RAG / transformer papers, whether uploaded as PDFs or pulled from arXiv). A retrieved chunk counts as relevant when its text contains every term in required_entities, matched case-insensitively after collapsing punctuation to spaces — so 'self-attention' and 'Self Attention' both match. Cases whose terms appear nowhere in a project's corpus are reported as unsupported and excluded from the aggregates rather than scored as zero.",
+  "test_cases": [
+    {
+      "id": "rag-001",
+      "question": "How does retrieval-augmented generation reduce hallucination?",
+      "expected_answer": "Retrieving relevant passages before generating grounds the answer in source text, so the model states what the corpus supports instead of inventing facts.",
+      "source_documents": [],
+      "required_entities": ["retrieval", "hallucination"],
+      "difficulty": "single-hop",
+      "tags": ["rag", "grounding"]
+    },
+    {
+      "id": "rag-002",
+      "question": "What role does dense vector similarity search play in retrieval?",
+      "expected_answer": "Dense vector similarity search over an embedding index selects the passages most semantically similar to the question before generation.",
+      "source_documents": [],
+      "required_entities": ["dense", "similarity"],
+      "difficulty": "single-hop",
+      "tags": ["rag", "retrieval"]
+    },
+    {
+      "id": "rag-003",
+      "question": "How does grounding an answer in external knowledge improve factual accuracy?",
+      "expected_answer": "Grounding conditions generation on retrieved external knowledge, which improves factual accuracy relative to relying on parameters alone.",
+      "source_documents": [],
+      "required_entities": ["external knowledge", "factual"],
+      "difficulty": "multi-hop",
+      "tags": ["rag", "factuality"]
+    },
+    {
+      "id": "tf-001",
+      "question": "How does self-attention let a transformer process a sequence in parallel?",
+      "expected_answer": "Self-attention scores all positions against each other at once, removing the sequential dependency that recurrence imposes.",
+      "source_documents": [],
+      "required_entities": ["self attention", "parallel"],
+      "difficulty": "single-hop",
+      "tags": ["transformers", "architecture"]
+    },
+    {
+      "id": "tf-002",
+      "question": "What does the transformer architecture replace recurrence with?",
+      "expected_answer": "It replaces recurrent computation with attention over the whole sequence.",
+      "source_documents": [],
+      "required_entities": ["recurrent", "transformer"],
+      "difficulty": "single-hop",
+      "tags": ["transformers", "architecture"]
+    },
+    {
+      "id": "tf-003",
+      "question": "What are the query, key, and value projections used for?",
+      "expected_answer": "Each token is projected into query, key, and value vectors so attention can weigh how relevant every other position is.",
+      "source_documents": [],
+      "required_entities": ["query", "value"],
+      "difficulty": "single-hop",
+      "tags": ["transformers", "attention"]
+    },
+    {
+      "id": "cmp-001",
+      "question": "How does a transformer differ from a recurrent neural network in training speed?",
+      "expected_answer": "Transformers avoid sequential computation, which enables substantially faster training on parallel hardware than recurrent networks allow.",
+      "source_documents": [],
+      "required_entities": ["recurrent", "training"],
+      "difficulty": "comparison",
+      "tags": ["transformers", "efficiency"]
+    },
+    {
+      "id": "cmp-002",
+      "question": "Where do retrieval-based and purely parametric approaches differ?",
+      "expected_answer": "Retrieval-based systems consult an external corpus at inference time, while parametric models answer only from weights learned during training.",
+      "source_documents": [],
+      "required_entities": ["retrieval", "language model"],
+      "difficulty": "comparison",
+      "tags": ["rag", "comparison"]
+    },
+    {
+      "id": "kg-001",
+      "question": "How can a knowledge graph support a retrieval pipeline?",
+      "expected_answer": "Graph traversal surfaces related entities whose passages a purely lexical or dense match would miss, which can be fused with vector hits.",
+      "source_documents": [],
+      "required_entities": ["knowledge"],
+      "difficulty": "multi-hop",
+      "tags": ["knowledge-graph", "retrieval"]
+    },
+    {
+      "id": "chk-001",
+      "question": "Why is a document split into chunks before it is embedded?",
+      "expected_answer": "Chunking keeps each embedded unit small enough to be specific, so retrieval returns the passage that answers the question rather than a whole document.",
+      "source_documents": [],
+      "required_entities": ["passages"],
+      "difficulty": "single-hop",
+      "tags": ["ingestion", "chunking"]
+    }
+  ]
+}

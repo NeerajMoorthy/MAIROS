@@ -1,0 +1,43 @@
+# MAIROS API dependencies
+# Install:  pip install -r requirements.txt
+# ---------------------------------------------------------------
+# Web framework
+fastapi>=0.111,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+pydantic-settings>=2.3,<3
+python-multipart>=0.0.9
+
+# LLM (Groq) — set GROQ_API_KEY in mairos/.env
+langchain-core>=0.3,<1
+langchain-groq>=0.2,<1
+
+# Vector store — ChromaDB in embedded mode, no server required
+chromadb>=0.5,<2
+sentence-transformers>=3,<6
+
+# Knowledge graph
+networkx>=3,<4
+
+# PDF extraction
+pymupdf>=1.24,<2
+
+# Utilities
+python-dotenv>=1,<2
+httpx>=0.27,<1
+
+# Authentication (optional at runtime: used only when AUTH_JWKS_URL is set).
+# Verifies the Better Auth JWTs issued by the frontend.
+pyjwt[crypto]>=2.9,<3
+
+# Supabase / Postgres metadata store (used only when DATABASE_URL is a
+# postgres:// URL; SQLite stays the local default).
+psycopg[binary]>=3.2,<4
+
+# Testing
+pytest>=8,<9
+pytest-asyncio>=0.23,<2
+
+# Optional — RAGAS evaluation harness (services/evaluation).
+# Heavy dependency tree; install only when running evals:
+#   pip install "ragas>=0.2,<1"
