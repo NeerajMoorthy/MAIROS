@@ -202,8 +202,6 @@ class SynthesisAgent(BaseAgent):
                     self._neutralise(ctx.focus_text()), _as_objects(ctx)
                 )
             answer = self._novelty_answer(ctx, summary)
-            if ctx.intermediate_results.get("project_brief"):
-                answer = self._project_header(ctx) + "\n\n" + answer
         else:
             ctx.log(
                 self.name,
@@ -217,7 +215,21 @@ class SynthesisAgent(BaseAgent):
                     "topic search first."
                 )
             else:
-                answer = await self.generation.generate(ctx.question, _as_objects(ctx))
+                # A project review whose novelty step failed lands here. It
+                # used to send the whole pasted description as the question;
+                # it asks about the brief's focus instead, never framed as a
+                # novelty question.
+                question = (
+                    self._neutralise(ctx.focus_text())
+                    if ctx.intermediate_results.get("project_brief")
+                    else ctx.question
+                )
+                answer = await self.generation.generate(question, _as_objects(ctx))
+
+        # Keyed on the brief, not on which branch ran: the reader must see what
+        # MAIROS took the project to be, and what it searched, in every case.
+        if ctx.intermediate_results.get("project_brief"):
+            answer = self._project_header(ctx) + "\n\n" + answer
 
         ctx.intermediate_results["final_answer"] = answer
         ctx.intermediate_results["citations"] = self._citations(ctx)

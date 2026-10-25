@@ -125,6 +125,9 @@ class Settings(BaseSettings):
     # Per-request timeout, in seconds, for every source. (Replaces the
     # arXiv-only ARXIV_MAX_RESULTS / ARXIV_TIMEOUT, which are no longer read.)
     literature_timeout: float = 20.0
+    # Most seconds a source that sends its queries one at a time (Semantic
+    # Scholar) may spend on one search; the rest of its queries are skipped.
+    literature_source_deadline: float = 40.0
 
     @property
     def literature_source_list(self) -> list[str]:

@@ -259,6 +259,21 @@ class ChromaStore:
             print(f"[chroma] count failed: {exc}")
             return 0
 
+    def delete_documents(self, project_id: str, document_ids) -> None:
+        """Remove one project's chunks for the given documents.
+
+        Used before re-indexing a fetched paper, so its earlier copies in this
+        project — under an older id scheme, or another of its identifiers — are
+        replaced rather than kept beside the new one. Other projects' chunks
+        are never touched. Failures escape, like :meth:`delete_project`.
+        """
+        ids = sorted({str(d) for d in document_ids if d})
+        if not project_id or not ids:
+            return
+        self.collection.delete(
+            where={"$and": [{"project_id": project_id}, {"document_id": {"$in": ids}}]}
+        )
+
     def delete_project(self, project_id: str) -> None:
         """Remove every indexed chunk owned by a project.
 

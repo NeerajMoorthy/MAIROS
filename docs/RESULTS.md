@@ -3,7 +3,7 @@
 This document separates two things that are easy to conflate: what MAIROS has
 **proven**, and what it has only **demonstrated**.
 
-- **Proven** — 766 automated tests (622 backend, 144 frontend) that run with
+- **Proven** — 796 automated tests (652 backend, 144 frontend) that run with
   no API key, no network and no model download, plus 9 Postgres contract tests
   run against a real PostgreSQL 16 server. They assert the system's own
   guarantees: routing decisions, retrieval ranking, evidence linking, the
@@ -41,12 +41,13 @@ evaluation on your own corpus to get figures for it.
 
 | Suite | Count | Scope |
 |---|---|---|
-| Backend (`pytest`) | 622 passed, 9 skipped | Agents, flows, retrieval, evaluation maths, API contracts, regressions |
+| Backend (`pytest`) | 652 passed, 9 skipped | Agents, flows, retrieval, evaluation maths, API contracts, regressions |
 | — of which `test_patents.py` | 62 | Segmentation, scoring, metadata, exports, disclaimer surface, legal-wording audit |
 | — of which `test_auth.py` | 15 | JWT verification and per-user isolation |
 | — of which `test_database_contract.py` | 13 (+9 Postgres) | One store contract for SQLite and Postgres; the 9 skipped run when `MAIROS_TEST_DATABASE_URL` is set and passed against PostgreSQL 16 |
 | — of which `test_literature_sources.py` | 52 | Three-source parsing, link allowlist, de-duplication and ranking, query planning, coverage report, unavailable sources |
 | — of which `test_project_flow.py` | 26 | Intake grounding, project routing, the `project` flow end to end |
+| — of which `test_review_fixes.py` | 30 | One regression test per finding of the independent review of the literature search and project review |
 | — of which `test_project_export.py` | 15 | Project data export: contents, provenance, no truncation, true manifest hashes, originals, isolation |
 | — of which `test_project_lifecycle.py` | 6 | Deletion cascade, upload storage, empty-project evidence boundary |
 | — of which `test_novelty.py` | 63 | The novelty boundary end to end, the `review` chain, routing |

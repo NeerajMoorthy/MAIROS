@@ -80,7 +80,40 @@ def _sentences(text: str) -> list[str]:
     return [" ".join(p.split()) for p in parts if len(p.split()) >= 4]
 
 
-def _grounded(item: str, description_tokens: set[str]) -> bool:
+def _items(value, split_commas: bool) -> list[str]:
+    """A model field as a list of strings, whatever shape it arrived in.
+
+    Models sometimes answer a list field with one string ("camera, infrared
+    sensors"). Iterating that string yielded single letters, which became
+    one-letter search keywords. Short-item fields split on commas; sentence
+    fields (goals, contributions) only on line breaks and semicolons, since a
+    sentence can contain commas.
+    """
+    if isinstance(value, str):
+        pattern = r"[;\n]+|,\s*" if split_commas else r"[;\n]+"
+        return [part.strip(" -•*\t") for part in re.split(pattern, value) if part.strip(" -•*\t")]
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value if isinstance(v, (str, int, float)) and str(v).strip()]
+    return []
+
+
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numbers(text: str) -> set[str]:
+    """The numbers in *text*, with thousands separators removed."""
+    return set(_NUMBER.findall(re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)))
+
+
+def _grounded(item: str, description_tokens: set[str], description_numbers: set[str]) -> bool:
+    """Whether the description supports *item*.
+
+    Most of its content words must appear in the description, and every number
+    in it must: word overlap alone ignores short tokens, so an invented
+    "detects 95% of cracks" passed as long as the words were the user's.
+    """
+    if _numbers(item) - description_numbers:
+        return False
     item_tokens = tokens(item)
     if not item_tokens:
         return False
@@ -154,30 +187,32 @@ class ProjectIntakeAgent(BaseAgent):
             return None, 0
 
         description_tokens = tokens(description)
+        description_numbers = _numbers(description)
         dropped = 0
         brief: dict = {}
 
         for field, limit in TEXT_LIMITS.items():
-            value = _clip(str(parsed.get(field) or ""), limit)
-            if value and not _grounded(value, description_tokens):
+            raw = parsed.get(field)
+            value = _clip(raw if isinstance(raw, str) else "", limit)
+            if value and not _grounded(value, description_tokens, description_numbers):
                 dropped += 1
                 value = ""
             brief[field] = value
 
         for field, limit in LIST_LIMITS.items():
             kept: list[str] = []
-            for item in parsed.get(field) or []:
-                value = _clip(str(item or ""), 300)
-                if not value:
+            for item in _items(parsed.get(field), split_commas=field in ("methods", "datasets")):
+                value = _clip(item, 300)
+                if not value or value in kept:
                     continue
-                if _grounded(value, description_tokens):
+                if _grounded(value, description_tokens, description_numbers):
                     kept.append(value)
                 else:
                     dropped += 1
             brief[field] = kept[:limit]
 
         keywords: list[str] = []
-        for item in parsed.get("keywords") or []:
+        for item in _items(parsed.get("keywords"), split_commas=True):
             # A single technical word ("transformers") is a fine search term.
             value = clean_query(item, min_words=1)
             if value and value.lower() not in {k.lower() for k in keywords}:

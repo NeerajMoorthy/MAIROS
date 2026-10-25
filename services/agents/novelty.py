@@ -27,7 +27,12 @@ from __future__ import annotations
 
 from services.common.json_utils import extract_json
 from services.generation.provider import TASK_NOVELTY
-from services.literature.papers import FETCHED_PREFIXES, SOURCE_NAMES, source_name_for_document
+from services.literature.papers import (
+    FETCHED_PREFIXES,
+    SOURCE_NAMES,
+    document_id_for,
+    source_name_for_document,
+)
 
 from .base import AgentContext, BaseAgent
 from .evidence import (
@@ -70,6 +75,11 @@ VERDICT_LABELS = {
 }
 
 MAX_CLAIMS = 6
+# Passages retrieved for each claim on top of the flow's own retrieval.
+CLAIM_TOP_K = 5
+# Sources shown to the model when it writes "how this relates" notes; coverage
+# itself is computed against every source, not just these.
+NOTE_SOURCES = 6
 
 
 def _ordered(names: set[str]) -> list[str]:
@@ -214,21 +224,43 @@ class NoveltyAgent(BaseAgent):
         papers list described one corpus as two, and on a project with no
         uploads of its own it presented "absent from a single literature query
         run moments ago" as a statement about the user's library. They are
-        separated by document id instead, and named by the source they came
-        from.
+        separated by document id instead, named by the sources the run's
+        papers actually came from, and kept apart from abstracts that earlier
+        searches indexed.
         """
         fetched = [s for s in sources if str(s.document_id).startswith(cls.FETCHED_PREFIXES)]
         owned = [s for s in sources if s not in fetched]
 
+        # Which fetched abstracts this run's search produced. Records without
+        # source ids (built before they existed) cannot be matched, so when
+        # every paper is like that the fetched abstracts are taken as this run's.
+        names_by_document = {
+            document_id_for(p): list(p.get("sources") or [p.get("source") or ""])
+            for p in papers
+            if p.get("source_ids")
+        }
+        if names_by_document:
+            now = [s for s in fetched if s.document_id in names_by_document]
+        else:
+            now = fetched if papers else []
+        earlier = [s for s in fetched if s not in now]
+
         parts = []
         if owned:
             parts.append(f"{len(owned)} document(s) already in this project")
-        if fetched:
-            names = _ordered({source_name_for_document(s.document_id) for s in fetched})
-            parts.append(
-                f"{len(fetched)} abstract(s) fetched from {_join(names)} during this run"
+        if now:
+            names = _ordered(
+                {
+                    name
+                    for s in now
+                    for name in names_by_document.get(s.document_id)
+                    or [source_name_for_document(s.document_id)]
+                }
             )
-        elif papers and not owned:
+            parts.append(f"{len(now)} abstract(s) fetched from {_join(names)} during this run")
+        if earlier:
+            parts.append(f"{len(earlier)} abstract(s) fetched by earlier searches in this project")
+        if not fetched and papers and not owned:
             # Papers were fetched but none came back through retrieval.
             names = _ordered(
                 {name for p in papers for name in (p.get("sources") or [p.get("source") or "arXiv"])}
@@ -237,7 +269,55 @@ class NoveltyAgent(BaseAgent):
                 f"{len(papers)} abstract(s) fetched from {_join(names)} during this run"
             )
 
-        return " and ".join(parts) if parts else "no documents from this project"
+        return _join(parts) if parts else "no documents from this project"
+
+    # ------------------------------------------------------------------
+    def _passages(self, ctx: AgentContext, claims: list[dict]) -> list[dict]:
+        """Every passage the claims are checked against.
+
+        This used to be the flow's retrieved passages alone. In the `project`
+        flow those are the top five for the whole description: a live run kept
+        8 papers and checked the contributions against 4 of them, all from one
+        source, while the answer said 8 had been searched. Now it is the flow's
+        passages, every abstract this run fetched, and a retrieval for each
+        claim itself, so a paper that covers a claim is found even when it did
+        not rank for the description as a whole.
+        """
+        pool = list(ctx.retrieved_chunks) + list(
+            ctx.intermediate_results.get("fetched_chunks") or []
+        )
+        if ctx.chroma_store is not None and ctx.project_id:
+            from services.retrieval.hybrid import HybridRetriever
+
+            retriever = HybridRetriever(vector=ctx.chroma_store)
+            for item in claims:
+                try:
+                    found, _ = retriever.retrieve(
+                        item["claim"], project_id=ctx.project_id, top_k=CLAIM_TOP_K
+                    )
+                except Exception as exc:  # a failed lookup narrows the check, it does not end it
+                    ctx.log(self.name, f"Per-claim retrieval failed ({type(exc).__name__})", self.stage)
+                    continue
+                pool += [
+                    {
+                        "chunk_id": chunk.chunk_id,
+                        "document_id": chunk.document_id,
+                        "document_name": chunk.document_name,
+                        "page": chunk.page,
+                        "text": chunk.text,
+                        "score": chunk.score,
+                    }
+                    for chunk in found
+                ]
+
+        seen: set[str] = set()
+        unique: list[dict] = []
+        for chunk in pool:
+            key = str(chunk.get("chunk_id") or "") or f"{chunk.get('document_id')}:{len(unique)}"
+            if key not in seen:
+                seen.add(key)
+                unique.append(chunk)
+        return unique
 
     # ------------------------------------------------------------------
     def _related_notes(
@@ -298,7 +378,9 @@ class NoveltyAgent(BaseAgent):
     # ------------------------------------------------------------------
     async def run(self, ctx: AgentContext) -> AgentContext:
         claims = self._claims(ctx)
-        sources = group_sources(list(ctx.retrieved_chunks))
+        passages = self._passages(ctx, claims)
+        # Every document is scored; only the model's notes prompt is capped.
+        sources = group_sources(passages, limit=max(1, len(passages)))
         papers = ctx.intermediate_results.get("retrieved_papers", []) or []
         scope = self._scope_text(sources, papers)
 
@@ -312,7 +394,7 @@ class NoveltyAgent(BaseAgent):
             ctx.log(self.name, "No claim to assess", self.stage)
             return ctx
 
-        notes, dropped = self._related_notes(claims, sources)
+        notes, dropped = self._related_notes(claims, sources[:NOTE_SOURCES])
 
         assessments = []
         for index, item in enumerate(claims):

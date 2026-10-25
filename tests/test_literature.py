@@ -110,7 +110,9 @@ class TestArxivParsing:
     @pytest.mark.asyncio
     async def test_fields_extracted(self, patched_arxiv):
         paper = (await LiteratureAgent(llm=None).fetch("rag"))[0]
-        assert paper["id"] == "2005.11401v4"
+        # Stored under its versionless arXiv id; the versioned one is kept.
+        assert paper["id"] == "arxiv:2005.11401"
+        assert paper["source_ids"]["arxiv"] == "2005.11401v4"
         assert paper["authors"] == ["Patrick Lewis", "Ethan Perez"]
         assert paper["year"] == "2020"
         assert paper["pdf_url"].endswith("2005.11401v4")

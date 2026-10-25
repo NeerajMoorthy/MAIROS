@@ -34,9 +34,13 @@ def build_coverage(
     duplicates: int,
     *,
     query_note: str = "",
+    ignored_sources: list[str] | None = None,
     today: date | None = None,
 ) -> dict:
-    """Summarise one search. ``runs`` are the sources' ``SourceRun`` results."""
+    """Summarise one search. ``runs`` are the sources' ``SourceRun`` results.
+
+    ``ignored_sources`` are configured source names MAIROS does not know.
+    """
     today = today or date.today()
     answered = [run for run in runs if run.status == "ok"]
     years = sorted(int(p["year"]) for p in kept if str(p.get("year", "")).isdigit())
@@ -47,7 +51,19 @@ def build_coverage(
     without_abstract = sum(1 for p in kept if not p.get("abstract"))
 
     warnings: list[str] = []
-    if runs and not answered:
+    if ignored_sources:
+        warnings.append(
+            f"Unknown source name(s) in LITERATURE_SOURCES were ignored: "
+            f"{', '.join(ignored_sources)}. Known sources: arxiv, openalex, semantic_scholar."
+        )
+    if not runs:
+        # Not an outage: nothing was asked. Saying "could not be reached" sent
+        # the reader to check their network instead of the setting.
+        warnings.append(
+            "No literature source is configured, so nothing was searched. Set "
+            "LITERATURE_SOURCES to one or more of arxiv, openalex, semantic_scholar."
+        )
+    elif not answered:
         warnings.append(
             "No literature source could be reached, so nothing was searched. "
             "Results below come only from documents already in this project."
@@ -97,6 +113,8 @@ def describe_scope(coverage: dict | None) -> str:
     """One line naming what was searched, for agents that quote their scope."""
     if not coverage:
         return ""
+    if not coverage.get("sources"):
+        return "no literature source (none is configured)"
     answered = [s["name"] for s in coverage.get("sources", []) if s.get("status") == "ok"]
     if not answered:
         return "no literature source (none could be reached)"

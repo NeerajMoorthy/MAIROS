@@ -98,6 +98,12 @@ class BaseAgent(ABC):
         is usually half a JSON object that every caller would then discard as
         unparseable — the same failure that once left the knowledge graph
         empty.
+
+        If the retry itself fails — on a free tier, usually a 429 because the
+        retry spends a second budget straight after the first (seen live) — the
+        cut-off reply is returned rather than lost: a caller that can salvage
+        part of it still can, and one that cannot parses nothing, as it would
+        have without the retry. Only a failed *first* call raises.
         """
         from services.common.json_utils import as_text
 
@@ -105,20 +111,26 @@ class BaseAgent(ABC):
             return ""
         try:
             response = self.llm.invoke(prompt)
-            if _hit_token_cap(response) and hasattr(self.llm, "bind"):
-                from app.config import settings
-
-                print(
-                    f"[{self.name}] reply reached the token cap; retrying with "
-                    f"{settings.llm_retry_max_tokens} tokens"
-                )
-                response = self.llm.bind(max_tokens=settings.llm_retry_max_tokens).invoke(prompt)
-                if _hit_token_cap(response):
-                    print(f"[{self.name}] reply still reached the token cap after the retry")
-            return as_text(response)
         except Exception as exc:
             print(f"[{self.name}] LLM call failed: {exc}")
             raise
+
+        if _hit_token_cap(response) and hasattr(self.llm, "bind"):
+            from app.config import settings
+
+            print(
+                f"[{self.name}] reply reached the token cap; retrying with "
+                f"{settings.llm_retry_max_tokens} tokens"
+            )
+            try:
+                retried = self.llm.bind(max_tokens=settings.llm_retry_max_tokens).invoke(prompt)
+            except Exception as exc:
+                print(f"[{self.name}] retry failed ({type(exc).__name__}); keeping the cut-off reply")
+                return as_text(response)
+            if _hit_token_cap(retried):
+                print(f"[{self.name}] reply still reached the token cap after the retry")
+            response = retried
+        return as_text(response)
 
     @abstractmethod
     async def run(self, ctx: AgentContext) -> AgentContext:

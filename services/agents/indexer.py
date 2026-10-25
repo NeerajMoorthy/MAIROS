@@ -25,15 +25,18 @@ class IndexerAgent(BaseAgent):
             return ctx
 
         from services.ingestion.chunker import RecursiveChunker
-        from services.literature import document_id_for
+        from services.literature import document_aliases, document_id_for
 
         chunker = RecursiveChunker(chunk_size=512, chunk_overlap=64)
+        project = ctx.project_id or "default"
         ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict] = []
+        replaced: set[str] = set()
 
         for paper in papers:
             doc_id = document_id_for(paper)
+            replaced |= {doc_id} | document_aliases(paper)
             body = (
                 f"Title: {paper['title']}\n"
                 f"Authors: {', '.join(paper.get('authors', []))}\n\n"
@@ -42,13 +45,16 @@ class IndexerAgent(BaseAgent):
             for chunk in chunker.chunk(
                 body, page=1, document_id=doc_id, document_name=paper["title"]
             ):
-                ids.append(f"{doc_id}_{chunk.index}")
+                # Scoped to the project: two projects fetching the same paper
+                # wrote the same id, so the second one's upsert took the
+                # chunk — and its `project_id` — away from the first.
+                ids.append(f"{project}:{doc_id}_{chunk.index}")
                 documents.append(chunk.text)
                 metadatas.append(
                     {
                         "document_id": doc_id,
                         "document_name": paper["title"],
-                        "project_id": ctx.project_id or "default",
+                        "project_id": project,
                         "page": 1,
                         "chunk_index": chunk.index,
                         "source": paper.get("source") or "arXiv",
@@ -57,6 +63,17 @@ class IndexerAgent(BaseAgent):
                     }
                 )
 
+        # Replace this project's earlier copies of these papers (older id
+        # schemes, or the same paper under another of its identifiers) so a
+        # repeated search never indexes a paper twice.
+        try:
+            ctx.chroma_store.delete_documents(project, replaced)
+        except Exception as exc:
+            ctx.log(
+                self.name,
+                f"Could not remove earlier copies before re-indexing ({type(exc).__name__})",
+                self.stage,
+            )
         indexed = ctx.chroma_store.add_chunks(ids, documents, metadatas)
         ctx.intermediate_results["indexed_chunks"] = indexed
         ctx.log(

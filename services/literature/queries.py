@@ -30,34 +30,58 @@ QUERY_PROMPT = (
     "Text:\n{text}\n"
 )
 
-_STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "been", "by", "can", "do", "does",
-    "for", "from", "give", "has", "have", "how", "i", "in", "into", "is", "it",
-    "its", "latest", "me", "my", "of", "on", "or", "our", "out", "paper", "papers",
-    "project", "recent", "review", "search", "show", "so", "such", "survey",
-    "than", "that", "the", "their", "them", "then", "there", "these", "this",
-    "those", "to", "using", "use", "used", "was", "we", "were", "what", "which",
-    "will", "with", "would", "why", "find", "about", "literature", "work",
-    "also", "based", "new", "propose", "proposed", "aim", "aims", "goal",
-    "system", "approach", "study", "student", "students",
-}
+# The one stopword list for literature search: building queries here and
+# turning them into arXiv terms in `sources.py` both use it, so a word is never
+# dropped at one step and kept at the next.
+SEARCH_STOPWORDS = frozenset({
+    "a", "an", "and", "are", "as", "at", "be", "been", "by", "can", "did", "do",
+    "does", "eg", "et", "al", "for", "from", "give", "has", "have", "how", "i",
+    "ie", "if", "in", "into", "is", "it", "its", "latest", "me", "my", "no", "of",
+    "on", "or", "our", "out", "paper", "papers", "project", "recent", "review",
+    "search", "show", "so", "such", "survey", "than", "that", "the", "their",
+    "them", "then", "there", "these", "this", "those", "to", "up", "us", "using",
+    "use", "used", "vs", "was", "we", "were", "what", "which", "will", "with",
+    "would", "why", "find", "about", "literature", "work", "also", "based", "new",
+    "propose", "proposed", "aim", "aims", "goal", "system", "approach", "study",
+    "student", "students",
+})
 
 MAX_QUERY_WORDS = 8
 MAX_QUERY_CHARS = 100
 
+_WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]|[A-Za-z0-9]")
+
 
 def _words(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]", normalize_name(text).lower())
+    return [w.lower() for w in _WORD.findall(normalize_name(text))]
 
 
-def _content(words: list[str]) -> list[str]:
-    return [w for w in words if len(w) > 2 and w not in _STOPWORDS]
+def is_acronym(word: str) -> bool:
+    """A two-character term worth searching for: "AI", "QA", "3D", "5G"."""
+    return len(word) == 2 and (word.isupper() or any(ch.isdigit() for ch in word))
 
 
-# Words that end a key phrase. Wider than _STOPWORDS: everyday verbs and
+def _content_words(text: str) -> list[str]:
+    """The text's searchable words, lowercased, in order.
+
+    Words of two characters were all dropped, which removed the acronyms that
+    name whole fields: "AI in healthcare" searched for "healthcare". A
+    two-character word is kept when it was written as an acronym.
+    """
+    words = []
+    for word in _WORD.findall(normalize_name(text)):
+        lowered = word.lower()
+        if lowered in SEARCH_STOPWORDS:
+            continue
+        if len(lowered) > 2 or is_acronym(word):
+            words.append(lowered)
+    return words
+
+
+# Words that end a key phrase. Wider than SEARCH_STOPWORDS: everyday verbs and
 # adjectives ("uses", "slow", "struggle") separate the technical terms in a
 # description rather than belong to them.
-_PHRASE_BREAKS = _STOPWORDS | {
+_PHRASE_BREAKS = SEARCH_STOPWORDS | {
     "after", "all", "any", "because", "before", "being", "between", "both",
     "but", "cheaper", "could", "each", "easier", "else", "every", "faster",
     "help", "helps", "here", "if", "just", "long", "make", "makes", "many",
@@ -117,7 +141,7 @@ def rule_queries(text: str, limit: int = 4) -> list[str]:
     its best multi-word key phrases, skipping any already contained in one
     chosen before.
     """
-    content = _content(_words(text))
+    content = _content_words(text)
     if not content:
         return []
     if len(content) <= 8 or limit <= 1:
@@ -143,7 +167,8 @@ def clean_query(value: object, min_words: int = 2) -> str:
     text = " ".join(text.split())
     if not min_words <= len(text.split()) <= MAX_QUERY_WORDS or len(text) > MAX_QUERY_CHARS:
         return ""
-    return text
+    # A single character is never a usable search term.
+    return text if len(text) >= 2 else ""
 
 
 def parse_model_queries(raw: str, limit: int) -> list[str]:
@@ -217,4 +242,12 @@ def plan_queries(
     return planned[:limit], note
 
 
-__all__ = ["QUERY_PROMPT", "clean_query", "parse_model_queries", "plan_queries", "rule_queries"]
+__all__ = [
+    "QUERY_PROMPT",
+    "SEARCH_STOPWORDS",
+    "clean_query",
+    "is_acronym",
+    "parse_model_queries",
+    "plan_queries",
+    "rule_queries",
+]

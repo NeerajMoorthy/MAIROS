@@ -1,6 +1,6 @@
 # Roadmap to completion
 
-Current state: **≈ 95%** of the full project scope. 622 backend and 144
+Current state: **≈ 95%** of the full project scope. 652 backend and 144
 frontend tests pass offline (plus 9 Postgres contract tests that pass against
 a real PostgreSQL 16 server), TypeScript is clean under `strict`, and both the
 production Next.js build and the Cloudflare Worker bundle build.
@@ -26,6 +26,7 @@ as 95% rather than 100%" until the figures exist.)
 | 5 | Novelty + literature review | ✅ Complete | `agents/novelty.py`, flows `novelty`, `review` |
 | 5a | Multi-source literature search + coverage report | ✅ Complete | `services/literature/` (arXiv, OpenAlex, Semantic Scholar); checked live 23 Oct 2026 against arXiv and OpenAlex — Semantic Scholar answered 429 without a key, and the report said so |
 | 5b | Project-description review | ✅ Complete | `agents/intake.py`, flow `project`, **Review my project** workflow |
+| 5c | Independent review of 5a and 5b | ✅ Complete | 15 findings, all reproduced and fixed, 30 regression tests in `tests/test_review_fixes.py`; listed in the README |
 | 6 | UX hardening | ✅ Complete | Browser audit + axe + computed contrast |
 | 7 | Baseline security | ✅ Complete | `app/middleware.py`, `app/errors.py` |
 

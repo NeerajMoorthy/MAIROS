@@ -10,7 +10,7 @@ novelty checking, and a full literature review — each one grounded in passages
 it can quote, plus an evaluation dashboard that measures retrieval quality with
 real IR metrics.
 
-**Everything below runs end to end today**, offline if necessary: 622 backend
+**Everything below runs end to end today**, offline if necessary: 652 backend
 tests and 144 frontend tests pass with no API key, no model download, and no
 network (plus 9 Postgres contract tests that run when a test database is
 configured — they pass against PostgreSQL 16).
@@ -88,7 +88,7 @@ is no CORS setup and no base URL to configure.
 curl http://localhost:8000/api/health
 # {"status":"ok","llm":{"provider":"groq","model":"llama-3.3-70b-versatile","live":true}, ...}
 
-cd mairos && python -m pytest -q     # 622 tests, no network or API key needed
+cd mairos && python -m pytest -q     # 652 tests, no network or API key needed
 ```
 
 ---
@@ -456,6 +456,11 @@ than the features:
 | `NoveltyAgent`'s hypothesis branch was unreachable | The more useful check — "is this hypothesis already in the corpus?" — never ran | `novelty` now runs after `hypothesis` in that flow |
 | The `review` flow counted its own fetched arXiv abstracts as "documents from this project" | On a project with no uploads, "absent from one arXiv query" was presented as a statement about the user's library | Fetched abstracts are identified by document id and reported separately |
 
+Smaller ones, also fixed: `Database.close()` closed only the calling thread's
+connection; a transient database-open failure permanently poisoned the store;
+the rate limiter's counter table had no eviction; `RouterAgent.run` passed a
+chunk count where a document count was meant.
+
 ### Found while adding multi-source literature search
 
 | Found | Why it mattered | Fix |
@@ -468,10 +473,31 @@ than the features:
 | In the `project` flow the knowledge graph was built after `gaps` | Live, the gap agent's graph signals came from an empty graph and the section was blank | The graph is built straight after indexing; the same live run then showed thin-coverage and never-compared-method signals |
 | `ARXIV_MAX_RESULTS` / `ARXIV_TIMEOUT` named one source | They no longer described what a search does | Replaced by `LITERATURE_*` settings; the old names are ignored |
 
-Smaller ones, also fixed: `Database.close()` closed only the calling thread's
-connection; a transient database-open failure permanently poisoned the store;
-the rate limiter's counter table had no eviction; `RouterAgent.run` passed a
-chunk count where a document count was meant.
+### Found in the independent review of literature search and project review
+
+An adversarial review of the new code (25 October 2026), read for ways each
+guarantee could fail. All fifteen findings were reproduced before they were
+fixed, and each has a regression test in `tests/test_review_fixes.py`: run
+against the reviewed commit, 27 of its 30 tests fail, at least one per finding
+(the other three guard against a fix overreaching).
+
+| Found | Why it mattered | Fix |
+|---|---|---|
+| Fetched-paper chunk ids carried no project | A second project fetching the same paper took over the first one's copy in the index; the first silently lost it, and deleting the second deleted it outright (this predates multi-source search) | Chunk ids are project-scoped |
+| A model field given as one string ("camera, infrared sensors") was read letter by letter | The brief's keywords became "r", "a", "i"… and the search was run for single letters | String fields are split into items (commas for short fields, not for sentences); single characters are never a query |
+| Contributions were checked only against the retriever's top five passages for the whole description | Live: 8 papers kept, contributions compared with 4 — all from one source — while the answer said 8 were searched | Each claim is checked against every abstract the run fetched plus a retrieval for that claim; the scope names what was checked, including abstracts from earlier searches |
+| A paper's id was its first source's id | Found through OpenAlex one day and arXiv the next, a paper was listed and indexed twice | One stable id (versionless arXiv id, else DOI, else the source's id); re-indexing replaces copies under any other id the paper is known by, including the ids earlier builds wrote |
+| The brief's grounding check ignored short numbers | An invented "detects 95% of cracks" was shown as the user's own claim | Every number in an extracted item must appear in the description |
+| Any request of 800+ characters was routed to `project` before the model router | A long patent-overlap request became a literature search | An explicit patent or analysis ask in the opening wins; for long text without first-person wording, so does any research ask |
+| Records were merged only when they matched one already seen | A preprint and its published version stayed two papers even after a third record carried both ids | Union-find over every shared identifier |
+| Every concept was attributed to the same first ten passages | With fetched abstracts boostable, the graph boost lifted all of them equally and meant nothing | Concepts point at the passages that mention them; papers link to the concepts their own abstract mentions |
+| Two-character words were dropped from search terms | "AI in healthcare" searched for "healthcare" | Acronyms (capitalised, or with a digit) are kept, in rule-based queries and arXiv terms |
+| arXiv's in-band error feed (HTTP 200, title "Error") was parsed as a paper | A paper titled "Error" could be indexed, graphed and cited | Error entries are skipped; a feed of nothing else marks arXiv as failed with its own message |
+| An empty or misspelled `LITERATURE_SOURCES` was reported as "none could be reached" | The reader was sent to check the network, and a model call was spent on queries nothing would run | The report says no source is configured, names unknown ones, and skips the model call |
+| Semantic Scholar's sequential queries each waited the full timeout | A stalled service could hold a search for 80 seconds | A per-search deadline (`LITERATURE_SOURCE_DEADLINE`, 40 s); what arrived in time is kept |
+| A failed token-cap retry discarded the first reply | Live, the retry hit Groq's per-minute limit; an agent without a fallback would then lose its partial answer | If the retry fails, the cut-off reply is returned; only a failed first call raises |
+| If the novelty step failed, a project answer lost its header and sent the whole description as its question | The reader no longer saw what was checked | The header is added whenever there is a brief, and the question is the brief's focus |
+| The literature package kept two stopword lists that disagreed | A word dropped from a query could still become an arXiv term | One list, shared by query building and arXiv terms (evidence matching keeps its own list by design) |
 
 ### Found while completing patents and the deployment stack
 
@@ -834,7 +860,7 @@ four-panel UI) and the Stage 1 UI/UX pass documented above.
 
 ```bash
 cd mairos
-python -m pytest -q            # 622 backend tests (+9 Postgres, skipped without a test DB)
+python -m pytest -q            # 652 backend tests (+9 Postgres, skipped without a test DB)
 python -m pytest tests/test_agents.py -v
 
 # Run the store contract against a real Postgres too:
@@ -861,6 +887,7 @@ can reach a real service by accident.
 | `test_literature_sources.py` | OpenAlex and Semantic Scholar parsing, the link allowlist, cross-source merging and ranking, query planning (model and rules), the coverage report, rate-limited and unreachable sources |
 | `test_project_flow.py` | The Intake agent's grounding rule, project-description routing, and the `project` flow end to end through the API |
 | `test_agent_token_cap.py` | Agent replies cut off at the output token cap are retried once with a larger budget |
+| `test_review_fixes.py` | One regression test per finding of the independent review of literature search and project review |
 | `test_evaluation.py` | Metric arithmetic against hand-worked values, golden-set relevance rules, runner behaviour, evaluation API |
 | `test_workflows.py` | Evidence linking, flow registration, the research workflows, patent safety boundary, end-to-end flow runs |
 | `test_novelty.py` | The novelty boundary (corpus coverage may be claimed, field novelty never is), the `review` chain, router changes |

@@ -93,12 +93,16 @@ async def run_pipeline(
         papers = results.get("retrieved_papers", [])
         references = results.get("references", [])
 
-        # Persist discovered papers so the Papers list survives the task.
+        # Persist discovered papers so the Papers list survives the task. Each
+        # replaces any copy stored earlier under another of its ids.
+        from services.literature import paper_aliases
+
         for index, paper in enumerate(papers):
             metadata_store.add_paper(
                 project_id,
                 paper,
                 reference=references[index] if index < len(references) else "",
+                aliases=paper_aliases(paper),
             )
 
         metadata_store.update_task_result(

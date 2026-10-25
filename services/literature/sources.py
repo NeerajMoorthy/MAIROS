@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from .papers import SOURCE_NAMES, bare_arxiv_id, new_paper, normalise_doi
+from .queries import SEARCH_STOPWORDS, is_acronym
 
 USER_AGENT = "MAIROS/0.3 (research assistant; metadata search)"
 
@@ -31,11 +32,9 @@ SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1/paper/search"
 
 _ATOM = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
-_STOPWORDS = {
-    "what", "which", "how", "why", "does", "did", "the", "and", "for", "with",
-    "about", "find", "papers", "paper", "recent", "work", "on", "of", "in", "a",
-    "an", "is", "are", "me", "show", "search", "give", "latest", "using", "use",
-}
+
+class SourceResponseError(Exception):
+    """A source answered, but with an error instead of results."""
 
 
 @dataclass
@@ -77,6 +76,8 @@ def _describe_failure(exc: Exception) -> tuple[str, str]:
         return "failed", "The request timed out."
     if isinstance(exc, httpx.TransportError):
         return "failed", "The service could not be reached."
+    if isinstance(exc, SourceResponseError):
+        return "failed", str(exc)
     return "failed", f"The response could not be read ({type(exc).__name__})."
 
 
@@ -84,12 +85,19 @@ def _describe_failure(exc: Exception) -> tuple[str, str]:
 # arXiv
 # ---------------------------------------------------------------------------
 def arxiv_query(text: str) -> str:
-    """Turn natural-language text into an arXiv ``search_query`` expression."""
-    words = [
-        w.strip(".,?!:;\"'()")
-        for w in (text or "").split()
-        if w.strip(".,?!:;\"'()").lower() not in _STOPWORDS and len(w.strip(".,?!:;\"'()")) > 2
-    ]
+    """Turn natural-language text into an arXiv ``search_query`` expression.
+
+    Two-character terms are kept when they are acronyms ("AI", "3D"), or when
+    the query has already been lowercased by the query builder — which has
+    removed every two-letter stopword by then.
+    """
+    words = []
+    for raw in (text or "").split():
+        word = raw.strip(".,?!:;\"'()")
+        if word.lower() in SEARCH_STOPWORDS:
+            continue
+        if len(word) > 2 or (len(word) == 2 and (is_acronym(word) or word.islower())):
+            words.append(word)
     terms = words[:6] or (text or "machine learning").split()[:4]
     return " AND ".join(f"all:{term}" for term in terms)
 
@@ -102,12 +110,22 @@ def _atom_text(node, path: str) -> str:
 
 
 def parse_arxiv(xml_text: str) -> list[dict]:
-    """Paper records from an arXiv Atom feed."""
+    """Paper records from an arXiv Atom feed.
+
+    arXiv reports errors in-band — HTTP 200 and a feed whose entry has an id
+    under ``/api/errors`` and the title "Error". Parsed as a paper, that became
+    a paper titled "Error" that was indexed, graphed and cited. Error entries
+    are skipped, and a feed holding nothing else raises with arXiv's message.
+    """
     root = ET.fromstring(xml_text)
     papers: list[dict] = []
+    errors: list[str] = []
     for entry in root.findall("atom:entry", _ATOM):
         title = _atom_text(entry, "atom:title")
         entry_id = _atom_text(entry, "atom:id")
+        if "/api/errors" in entry_id:
+            errors.append(_atom_text(entry, "atom:summary") or title or "unknown error")
+            continue
         if not title or not entry_id:
             continue
 
@@ -136,6 +154,8 @@ def parse_arxiv(xml_text: str) -> list[dict]:
                 primary_category=category.get("term", "") if category is not None else "",
             )
         )
+    if errors and not papers:
+        raise SourceResponseError(f"arXiv reported an error: {errors[0]}")
     return papers
 
 
@@ -321,14 +341,27 @@ class SemanticScholarSource:
     Without a key it shares a public rate limit and often answers 429; queries
     are therefore sent one at a time and the search stops at the first 429.
     ``SEMANTIC_SCHOLAR_API_KEY`` lifts the limit.
+
+    Sent one at a time, a stalled service used to hold the whole search for
+    every query's full timeout in turn (4 x 20 s), long after arXiv and
+    OpenAlex had answered. ``deadline`` caps the total: each request gets only
+    the time left, and the remaining queries are skipped once it runs out.
     """
 
     key = "semantic_scholar"
     FIELDS = "paperId,title,abstract,authors,year,publicationDate,externalIds,url,venue,citationCount"
 
-    def __init__(self, per_query: int = 5, api_key: str = ""):
+    def __init__(
+        self,
+        per_query: int = 5,
+        api_key: str = "",
+        deadline: float | None = None,
+        request_timeout: float | None = None,
+    ):
         self.per_query = per_query
         self.api_key = api_key
+        self.deadline = deadline
+        self.request_timeout = request_timeout
 
     def url(self, query: str) -> str:
         params = {"query": query, "limit": self.per_query, "fields": self.FIELDS}
@@ -340,10 +373,23 @@ class SemanticScholarSource:
         if self.api_key:
             headers["x-api-key"] = self.api_key
 
+        loop = asyncio.get_running_loop()
+        started = loop.time()
         failed = 0
-        for query in queries:
+        stopped_after: int | None = None
+        for position, query in enumerate(queries):
+            options: dict = {"headers": headers}
+            timeout = self.request_timeout
+            if self.deadline is not None:
+                remaining = self.deadline - (loop.time() - started)
+                if remaining <= 0:
+                    stopped_after = position
+                    break
+                timeout = remaining if timeout is None else min(timeout, remaining)
+            if timeout is not None:
+                options["timeout"] = timeout
             try:
-                response = await client.get(self.url(query), headers=headers)
+                response = await client.get(self.url(query), **options)
                 response.raise_for_status()
                 run.ranked.append(parse_semantic_scholar(response.json()))
             except Exception as exc:
@@ -354,39 +400,70 @@ class SemanticScholarSource:
                     break
                 run.detail = detail
 
-        if not run.ranked and run.status == "ok" and failed:
+        if not run.ranked and run.status == "ok" and (failed or stopped_after is not None):
             run.status = "failed"
         elif run.ranked and failed and run.status == "ok":
             run.detail = f"{failed} of {len(queries)} queries failed."
+        if stopped_after is not None:
+            stop = (
+                f"Stopped after {stopped_after} of {len(queries)} queries to keep the "
+                f"search within {self.deadline:g} s."
+            )
+            run.detail = f"{run.detail} {stop}" if run.ranked and run.detail else stop
         if run.status == "rate_limited" and not self.api_key:
             run.detail += " Set SEMANTIC_SCHOLAR_API_KEY to raise the limit."
         return run
 
 
 # ---------------------------------------------------------------------------
-def build_sources(names: list[str], per_query: int, *, mailto: str = "", s2_key: str = ""):
+KNOWN_SOURCES = ("arxiv", "openalex", "semantic_scholar")
+
+
+def _source_key(name: str) -> str:
+    return name.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def unknown_sources(names: list[str]) -> list[str]:
+    """Configured source names MAIROS does not know, as written."""
+    return [n.strip() for n in names if n.strip() and _source_key(n) not in KNOWN_SOURCES]
+
+
+def build_sources(
+    names: list[str],
+    per_query: int,
+    *,
+    mailto: str = "",
+    s2_key: str = "",
+    deadline: float | None = None,
+    request_timeout: float | None = None,
+):
     """The configured sources, in the order given, unknown names ignored."""
     factories = {
         "arxiv": lambda: ArxivSource(per_query),
         "openalex": lambda: OpenAlexSource(per_query, mailto=mailto),
-        "semantic_scholar": lambda: SemanticScholarSource(per_query, api_key=s2_key),
+        "semantic_scholar": lambda: SemanticScholarSource(
+            per_query, api_key=s2_key, deadline=deadline, request_timeout=request_timeout
+        ),
     }
     built = []
     for name in names:
-        key = name.strip().lower().replace("-", "_").replace(" ", "_")
+        key = _source_key(name)
         if key in factories and key not in {s.key for s in built}:
             built.append(factories[key]())
     return built
 
 
 __all__ = [
+    "KNOWN_SOURCES",
     "ArxivSource",
     "OpenAlexSource",
     "SemanticScholarSource",
+    "SourceResponseError",
     "SourceRun",
     "arxiv_query",
     "build_sources",
     "parse_arxiv",
     "parse_openalex",
     "parse_semantic_scholar",
+    "unknown_sources",
 ]

@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+import re
+
+from services.common.text import normalize_name
 from services.knowledge_graph.entity_extractor import EntityRelationExtractor
 from services.knowledge_graph.networkx_store import kg_store
 
 from .base import AgentContext, BaseAgent
+
+# Most chunks a concept is linked back to.
+MAX_SOURCE_CHUNKS = 10
+# Most concepts a paper node is linked to.
+MAX_PAPER_CONCEPTS = 6
+
+
+def mentions(name: str, text: str) -> bool:
+    """Whether *text* mentions *name* as a whole word or phrase."""
+    needle = normalize_name(name).lower()
+    if not needle:
+        return False
+    pattern = rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])"
+    return re.search(pattern, normalize_name(text).lower()) is not None
 
 
 class KnowledgeGraphAgent(BaseAgent):
@@ -65,16 +82,21 @@ class KnowledgeGraphAgent(BaseAgent):
                 summary = "was incomplete" if result.entities else "produced nothing"
                 ctx.log(self.name, f"Entity extraction {summary}: {result.problem}", self.stage)
 
-            # Link entities back to the chunks they came from, so graph hits can
-            # boost vector retrieval later.
-            chunk_ids = [c.get("chunk_id") for c in ctx.retrieved_chunks if c.get("chunk_id")]
+            # Link each entity back to the chunks that mention it, so a graph
+            # hit boosts the passages about that concept. Every entity used to
+            # get the same first ten chunks: each fetched abstract was then
+            # boosted whenever any concept matched, and the boost meant nothing.
+            chunks = [c for c in ctx.retrieved_chunks if c.get("chunk_id")]
 
             for entity in result.entities:
+                sources = [
+                    c["chunk_id"] for c in chunks if mentions(entity.name, c.get("text", ""))
+                ]
                 added = graph.add_entity(
                     entity.name,
                     entity.type,
                     entity.description,
-                    source_chunk_ids=chunk_ids[:10],
+                    source_chunk_ids=sources[:MAX_SOURCE_CHUNKS],
                     save=False,
                 )
                 if added:
@@ -92,9 +114,13 @@ class KnowledgeGraphAgent(BaseAgent):
                 ):
                     relation_count += 1
 
-        # 3. Connect each paper node to the concepts found in this run.
+        # 3. Connect each paper node to the concepts found in this run that its
+        #    own title or abstract mentions — not to the same first six for
+        #    every paper, which made unrelated papers look connected.
         for paper in papers:
-            for concept in added_concepts[:6]:
+            own_text = f"{paper.get('title', '')}\n{paper.get('abstract', '')}"
+            linked = [c for c in added_concepts if mentions(c, own_text)]
+            for concept in linked[:MAX_PAPER_CONCEPTS]:
                 graph.add_relation(paper["title"], "PART_OF", concept, 0.6, save=False)
 
         graph.save()

@@ -14,7 +14,7 @@ because the three services score on unrelated scales.
 
 from __future__ import annotations
 
-from .papers import title_key
+from .papers import paper_id_for, title_key
 
 # The usual RRF constant: damps the advantage of a first place in one list.
 RRF_K = 60
@@ -105,31 +105,53 @@ def merge_ranked(
         The merged papers, ranked, and how many duplicate records were folded
         into another one.
     """
+    # Every record with its rank, in the order the lists arrived.
+    entries = [
+        (rank, paper) for papers in ranked_lists for rank, paper in enumerate(papers, start=1)
+    ]
+
+    # Records sharing any identifier are one paper, and so are records joined
+    # only through a third: an arXiv preprint and a published version with a
+    # different title are one paper once a record carrying both the arXiv id
+    # and the DOI turns up. Attaching each record to the first match left
+    # those two separate (union-find joins them).
+    parent = list(range(len(entries)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    owner: dict[str, int] = {}
+    for index, (_rank, paper) in enumerate(entries):
+        for key in _keys(paper):
+            if key in owner:
+                parent[find(index)] = find(owner[key])
+            else:
+                owner[key] = index
+
+    groups: dict[int, list[int]] = {}
+    for index in range(len(entries)):
+        groups.setdefault(find(index), []).append(index)
+
     merged: list[dict] = []
     scores: list[float] = []
-    by_key: dict[str, int] = {}
-    duplicates = 0
-
-    for papers in ranked_lists:
-        for rank, paper in enumerate(papers, start=1):
-            keys = _keys(paper)
-            index = next((by_key[k] for k in keys if k in by_key), None)
-            if index is None:
-                index = len(merged)
-                record = dict(paper)
-                record["sources"] = list(paper.get("sources", []))
-                merged.append(record)
-                scores.append(0.0)
-            else:
-                duplicates += 1
-                _absorb(merged[index], paper)
-            scores[index] += 1.0 / (RRF_K + rank)
-            for key in _keys(merged[index]):
-                by_key.setdefault(key, index)
+    for members in sorted(groups.values(), key=lambda m: m[0]):
+        first = entries[members[0]][1]
+        record = dict(first)
+        record["sources"] = list(first.get("sources", []))
+        record["source_ids"] = dict(first.get("source_ids", {}))
+        for index in members[1:]:
+            _absorb(record, entries[index][1])
+        merged.append(record)
+        scores.append(sum(1.0 / (RRF_K + entries[index][0]) for index in members))
+    duplicates = len(entries) - len(merged)
 
     for record in merged:
         record["url"] = _best_link(record)
         record["source"] = record["sources"][0] if record["sources"] else record.get("source", "")
+        record["id"] = paper_id_for(record)
 
     if focus and merged:
         from services.agents.evidence import tokens

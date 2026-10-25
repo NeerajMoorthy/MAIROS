@@ -211,17 +211,38 @@ _PROJECT_HINTS = (
     "i am developing", "proposed system", "my system", "our system",
 )
 PROJECT_MIN_CHARS = 200
-# A pasted block this long is a description whatever words it uses.
+# A pasted block this long is likely a description even without first-person
+# wording — unless its opening asks for something else (see below).
 PROJECT_LONG_CHARS = 800
+# How much of a request counts as its opening, where an explicit ask sits.
+OPENING_CHARS = 200
 
 
 def looks_like_project_description(question: str) -> bool:
-    """Whether a request is a pasted description of the user's own project."""
+    """Whether a request is a pasted description of the user's own project.
+
+    Length alone used to decide it: any request of 800 characters or more went
+    to `project`, before the model router was consulted, so "Does anything in
+    this project overlap the patent claims below? 1. A method…" became a
+    literature search. An explicit ask in the opening now wins — a patent or
+    document-analysis ask always, and for a long text without first-person
+    wording, any of the research asks too.
+    """
     text = (question or "").strip()
+    if len(text) < PROJECT_MIN_CHARS:
+        return False
     lowered = text.lower()
-    if len(text) >= PROJECT_LONG_CHARS:
+    opening = lowered[:OPENING_CHARS]
+    if any(h in opening for h in _PATENT_HINTS + _ANALYZE_HINTS):
+        return False
+    if any(h in lowered for h in _PROJECT_HINTS):
         return True
-    return len(text) >= PROJECT_MIN_CHARS and any(h in lowered for h in _PROJECT_HINTS)
+    if len(text) < PROJECT_LONG_CHARS:
+        return False
+    explicit = (
+        _NOVELTY_HINTS + _EXPERIMENT_HINTS + _HYPOTHESIS_HINTS + _REVIEW_HINTS + _DISCOVERY_HINTS
+    )
+    return not any(h in opening for h in explicit)
 
 
 @dataclass

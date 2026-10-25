@@ -213,7 +213,7 @@ cd mairos && .venv\Scripts\python.exe -m pytest -q
 cd mairos\apps\web && npm test
 ```
 
-**Expected:** 622 backend tests pass (9 Postgres tests skipped) and 144
+**Expected:** 652 backend tests pass (9 Postgres tests skipped) and 144
 frontend tests pass.
 
 ## Results checklist

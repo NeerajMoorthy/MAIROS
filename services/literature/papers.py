@@ -24,11 +24,12 @@ SOURCE_NAMES: dict[str, str] = {
     "semantic_scholar": "Semantic Scholar",
 }
 
-# Document-id prefix the Indexer writes fetched abstracts under, per source.
-# The Novelty agent reads these back to tell fetched abstracts apart from the
-# user's own uploads, so the two lists must stay in step.
+# Document-id prefix for each kind of identifier a fetched paper can be indexed
+# under. The Novelty agent reads these back to tell fetched abstracts apart from
+# the user's own uploads, so the two lists must stay in step.
 DOCUMENT_PREFIXES: dict[str, str] = {
     "arxiv": "arxiv_",
+    "doi": "doi_",
     "openalex": "openalex_",
     "semantic_scholar": "s2_",
 }
@@ -144,25 +145,82 @@ def new_paper(source: str, source_id: str, **fields) -> dict:
     return paper
 
 
-def document_id_for(paper: dict) -> str:
-    """The id a fetched paper's abstract is indexed under.
+def _identifiers(paper: dict) -> list[tuple[str, str]]:
+    """Every identifier a paper is known by, the most widely shared first.
 
-    arXiv papers keep the ``arxiv_<id>`` form earlier builds wrote, so a
-    project's existing index and its new searches agree on the same paper.
+    A paper's identity must not depend on which source happened to answer a
+    search: when it did (the first source's own id was used), a paper found
+    through OpenAlex one day and arXiv the next was stored and indexed twice.
+    The arXiv id leads because every source reports it for a preprint; a
+    journal DOI comes next, then each source's own id.
     """
     source_ids = paper.get("source_ids") or {}
-    for source in ("arxiv", "openalex", "semantic_scholar"):
+    found: list[tuple[str, str]] = []
+    arxiv = paper.get("arxiv_id") or bare_arxiv_id(source_ids.get("arxiv"))
+    if arxiv:
+        found.append(("arxiv", arxiv))
+    doi = normalise_doi(paper.get("doi"))
+    if doi and not doi.startswith("10.48550/"):
+        found.append(("doi", doi))
+    for source in ("openalex", "semantic_scholar"):
         if source_ids.get(source):
-            return f"{DOCUMENT_PREFIXES[source]}{source_ids[source]}"
+            found.append((source, str(source_ids[source])))
+    return found
+
+
+def paper_id_for(paper: dict) -> str:
+    """A paper's stable id, the same whichever sources returned it."""
+    identifiers = _identifiers(paper)
+    if identifiers:
+        kind, value = identifiers[0]
+        return f"{kind}:{value}"
+    return str(paper.get("id", ""))
+
+
+def document_id_for(paper: dict) -> str:
+    """The id a fetched paper's abstract is indexed under."""
+    identifiers = _identifiers(paper)
+    if identifiers:
+        kind, value = identifiers[0]
+        return f"{DOCUMENT_PREFIXES[kind]}{value}"
     # A record built before ``source_ids`` existed came from arXiv.
     return f"{DOCUMENT_PREFIXES['arxiv']}{paper.get('id', '')}"
 
 
+def document_aliases(paper: dict) -> set[str]:
+    """Other document ids this paper may already be indexed under.
+
+    Covers every identifier it is known by now, and the ids earlier builds
+    wrote — the versioned arXiv id (``arxiv_2005.11401v4``) and each source's
+    own id — so re-indexing a paper replaces its earlier copies instead of
+    adding another.
+    """
+    source_ids = paper.get("source_ids") or {}
+    aliases = {f"{DOCUMENT_PREFIXES[kind]}{value}" for kind, value in _identifiers(paper)}
+    for source, value in source_ids.items():
+        if value and source in DOCUMENT_PREFIXES:
+            aliases.add(f"{DOCUMENT_PREFIXES[source]}{value}")
+    aliases.discard(document_id_for(paper))
+    return aliases
+
+
+def paper_aliases(paper: dict) -> set[str]:
+    """Other ids this paper may already be stored under in a project's list."""
+    aliases = {f"{kind}:{value}" for kind, value in _identifiers(paper)}
+    aliases.update(str(v) for v in (paper.get("source_ids") or {}).values() if v)
+    aliases.discard(paper_id_for(paper))
+    return aliases
+
+
 def source_name_for_document(document_id: str) -> str:
-    """Which source a fetched abstract's document id belongs to, or ``""``."""
-    for source, prefix in DOCUMENT_PREFIXES.items():
+    """Which source a fetched abstract's document id names, or ``""``.
+
+    A DOI-keyed id names no source, so callers that know which sources a
+    paper actually came from should prefer that.
+    """
+    for kind, prefix in DOCUMENT_PREFIXES.items():
         if str(document_id).startswith(prefix):
-            return SOURCE_NAMES[source]
+            return SOURCE_NAMES.get(kind, "")
     return ""
 
 
@@ -173,9 +231,12 @@ __all__ = [
     "PAPER_FIELDS",
     "SOURCE_NAMES",
     "bare_arxiv_id",
+    "document_aliases",
     "document_id_for",
     "new_paper",
     "normalise_doi",
+    "paper_aliases",
+    "paper_id_for",
     "safe_link",
     "source_name_for_document",
     "title_key",

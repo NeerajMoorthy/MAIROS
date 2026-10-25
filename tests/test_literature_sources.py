@@ -19,6 +19,7 @@ from services.literature.coverage import build_coverage, describe_scope
 from services.literature.merge import merge_ranked
 from services.literature.papers import (
     bare_arxiv_id,
+    document_aliases,
     document_id_for,
     new_paper,
     normalise_doi,
@@ -89,11 +90,15 @@ class TestPaperRecords:
         """Links stay allowlisted: a metadata record cannot smuggle one in."""
         assert safe_link(url) == ""
 
-    def test_document_ids_keep_the_arxiv_form_earlier_builds_wrote(self):
-        paper = new_paper("arxiv", "2005.11401v4", title="T")
-        assert document_id_for(paper) == "arxiv_2005.11401v4"
+    def test_document_ids_are_stable_and_earlier_forms_are_aliases(self):
+        paper = new_paper("arxiv", "2005.11401v4", title="T", arxiv_id="2005.11401")
+        # Versionless, so v4 today and v5 next month are one paper.
+        assert document_id_for(paper) == "arxiv_2005.11401"
+        # The id earlier builds wrote is recognised, so re-indexing replaces it.
+        assert "arxiv_2005.11401v4" in document_aliases(paper)
         assert document_id_for(new_paper("openalex", "W1", title="T")) == "openalex_W1"
         assert document_id_for(new_paper("semantic_scholar", "abc", title="T")) == "s2_abc"
+        assert document_id_for(new_paper("openalex", "W2", title="T", doi="10.1/x")) == "doi_10.1/x"
         # A record saved before source ids existed came from arXiv.
         assert document_id_for({"id": "1706.03762v7"}) == "arxiv_1706.03762v7"
 
@@ -176,8 +181,9 @@ class TestMerging:
         assert rag["citation_count"] == 4300
         assert rag["venue"] == "Neural Information Processing Systems"
         assert rag["pdf_url"].startswith("http://arxiv.org/pdf/")
-        # The indexing id stays the arXiv one.
-        assert document_id_for(rag) == "arxiv_2005.11401v4"
+        # Indexed and stored under its versionless arXiv id.
+        assert document_id_for(rag) == "arxiv_2005.11401"
+        assert rag["id"] == "arxiv:2005.11401"
 
     def test_papers_several_sources_agree_on_rank_first(self):
         titles = [p["title"] for p in merge_ranked(_ranked())[0]]
@@ -408,11 +414,14 @@ class TestLiteratureAgent:
         assert coverage["queries"] == [
             {"text": "retrieval augmented generation", "written_by": "rules"}
         ]
-        # One chunk per kept paper, under its source's document-id prefix.
-        assert {c["document_id"].split("_")[0] for c in ctx.retrieved_chunks} == {
-            "arxiv",
-            "openalex",
-            "s2",
+        # One chunk per kept paper, under its stable id: every paper here has an
+        # arXiv id somewhere in its records (DPR's and REALM's come only from
+        # Semantic Scholar), so all four are keyed by it.
+        assert {c["document_id"] for c in ctx.retrieved_chunks} == {
+            "arxiv_2005.11401",
+            "arxiv_1706.03762",
+            "arxiv_2004.04906",
+            "arxiv_2002.08909",
         }
         assert any("Venue: Neural Information Processing Systems" in c["text"] for c in ctx.retrieved_chunks)
 
@@ -479,7 +488,7 @@ class TestLiteratureAgent:
 
 class TestDownstream:
     @pytest.mark.asyncio
-    async def test_fetched_abstracts_are_indexed_under_their_source(self, monkeypatch, chroma_store):
+    async def test_fetched_abstracts_are_indexed_under_their_stable_id(self, monkeypatch, chroma_store):
         from services.agents.indexer import IndexerAgent
 
         use_recorded_sources(monkeypatch)
@@ -489,7 +498,9 @@ class TestDownstream:
 
         hits = chroma_store.query("open-domain question answering passage retrieval", top_k=8)
         dpr = next(h for h in hits if h.document_name.startswith("Dense Passage"))
-        assert dpr.document_id == "openalex_W3099700870"
+        # OpenAlex returned it first, but Semantic Scholar knew its arXiv id.
+        assert dpr.document_id == "arxiv_2004.04906"
+        assert dpr.chunk_id.startswith("p1:")
 
     @pytest.mark.asyncio
     async def test_graph_hits_boost_the_chunks_of_a_fetched_abstract(
@@ -509,7 +520,7 @@ class TestDownstream:
         ctx = await IndexerAgent(llm=None).run(ctx)
 
         # What the Knowledge Graph agent records for a fetched abstract.
-        dpr_document = "openalex_W3099700870"
+        dpr_document = "arxiv_2004.04906"
         assert dpr_document in {c["chunk_id"] for c in ctx.retrieved_chunks}
         store = KnowledgeGraphStore(base_dir=tmp_path / "graphs")
         graph = store.for_project("p1")

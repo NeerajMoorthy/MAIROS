@@ -13,7 +13,10 @@ from .merge import merge_ranked
 from .papers import (
     FETCHED_PREFIXES,
     SOURCE_NAMES,
+    document_aliases,
     document_id_for,
+    paper_aliases,
+    paper_id_for,
     safe_link,
     source_name_for_document,
 )
@@ -27,8 +30,11 @@ __all__ = [
     "build_coverage",
     "build_sources",
     "describe_scope",
+    "document_aliases",
     "document_id_for",
     "merge_ranked",
+    "paper_aliases",
+    "paper_id_for",
     "plan_queries",
     "rule_queries",
     "safe_link",

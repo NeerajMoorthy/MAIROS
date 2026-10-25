@@ -337,8 +337,18 @@ class MetadataStore:
     # ------------------------------------------------------------------
     # Papers (discovered by the Literature agent)
     # ------------------------------------------------------------------
-    def add_paper(self, project_id: str, paper: dict, reference: str = "") -> Paper:
+    def add_paper(
+        self, project_id: str, paper: dict, reference: str = "", aliases=()
+    ) -> Paper:
+        """Store a discovered paper, replacing any copy under one of *aliases*.
+
+        *aliases* are the other ids the same paper may already be stored under
+        in this project — an earlier build's id scheme, or another of its
+        identifiers — so a repeated search updates the paper instead of
+        listing it twice.
+        """
         paper_id = f"{project_id}:{paper.get('id') or uuid.uuid4()}"
+        stale = {f"{project_id}:{alias}" for alias in aliases if alias} - {paper_id}
         record = Paper(
             id=paper_id,
             project_id=project_id,
@@ -357,10 +367,15 @@ class MetadataStore:
             reference=reference,
         )
         with self._lock:
+            removed = [sid for sid in stale if self._papers.pop(sid, None) is not None]
             self._papers[paper_id] = record
             project = self._projects.get(project_id)
-            if project and paper_id not in project.paper_ids:
-                project.paper_ids.append(paper_id)
+            if project:
+                project.paper_ids = [pid for pid in project.paper_ids if pid not in stale]
+                if paper_id not in project.paper_ids:
+                    project.paper_ids.append(paper_id)
+        for sid in removed:
+            self._forget("papers", sid)
         self._persist("papers", record)
         if project:
             self._persist("projects", project)
