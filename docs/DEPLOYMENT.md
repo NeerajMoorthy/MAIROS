@@ -4,6 +4,10 @@ MAIROS still runs entirely on one machine with no accounts and no services —
 that is the default and nothing below changes it. This guide is for putting it
 on the internet for several users, with this stack:
 
+> The demo that is live now — the website on Vercel, the API on the project
+> owner's PC through a Cloudflare tunnel, no sign-in — is a different, simpler
+> setup. See [LIVE_DEMO.md](LIVE_DEMO.md).
+
 | Concern | Service | Where it lives in the repo |
 |---|---|---|
 | Frontend hosting | **Cloudflare Workers** (Next.js via OpenNext) | `apps/web/wrangler.jsonc`, `apps/web/open-next.config.ts` |

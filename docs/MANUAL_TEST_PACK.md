@@ -6,6 +6,10 @@
 **Time:** about 60–90 minutes with a live model. Record each result in the
 checklist at the end.
 
+For one sample project followed from creation to deletion, with every file
+and every piece of text provided, use
+[SAMPLE_PROJECT_WALKTHROUGH.md](SAMPLE_PROJECT_WALKTHROUGH.md) instead.
+
 ## 0. Pre-flight
 
 Start the API and the web app (see the README, *Run it*), then check:
@@ -177,7 +181,7 @@ A short question such as `Is my project idea new?` must **not** route to
 
 | # | Step | Expected |
 |---|---|---|
-| F.1 | Upload a scanned (image-only) PDF; separately, a text file renamed to `.pdf` | Scanned PDF: HTTP 422 with a message that it looks like a scanned image and OCR is not supported. Renamed file: a readable error. In both cases no document is added. |
+| F.1 | Upload a scanned (image-only) PDF; separately, a text file renamed to `.pdf` | Scanned PDF: HTTP 422 with a message that it looks like a scanned image and OCR is not supported. Renamed file: HTTP 400, "This file is not a readable PDF…". In both cases no document is added, and the project can be deleted straight away. |
 | F.2 | Stop the API (Ctrl+C), then use the app | The sidebar reads **Backend offline**; actions show a readable error instead of a blank screen. Restart the API: the project, documents and task history are all still there. |
 | F.3 | Run two workflows back to back without waiting | If Groq returns 429, the trace says which step was rate-limited and the run still completes (e.g. references fall back to the built-in APA formatter). |
 | F.4 | Turn off Wi-Fi and run a Topic search | All three sources are reported *not reached*; the warning says nothing was searched; the run completes without a crash. |
@@ -213,7 +217,7 @@ cd mairos && .venv\Scripts\python.exe -m pytest -q
 cd mairos\apps\web && npm test
 ```
 
-**Expected:** 655 backend tests pass (9 Postgres tests skipped) and 144
+**Expected:** 683 backend tests pass (9 Postgres tests skipped) and 145
 frontend tests pass.
 
 ## Results checklist

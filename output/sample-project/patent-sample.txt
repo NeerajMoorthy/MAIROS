@@ -1,0 +1,15 @@
+FICTIONAL PATENT TEXT, written for testing MAIROS. It is not a real patent.
+
+Type this into the Title box:
+Rail inspection trolley with camera and vibration sensing
+
+Paste everything between the two lines below into the Text box.
+------------------------------------------------------------------------
+Abstract: A trolley inspects railway track using a camera and an axle-mounted accelerometer, and reports suspected defects together with their GPS position.
+
+Claims:
+1. A rail inspection trolley comprising a camera directed at the rail head, an accelerometer mounted on an axle of the trolley, and a processor that classifies camera images of the rail head as cracked or intact.
+2. The trolley of claim 1, wherein the processor is a single-board computer running a convolutional neural network.
+3. The trolley of claim 1, wherein the accelerometer samples at not less than 1 kHz and an anomaly score is computed for each window of samples.
+4. The trolley of claim 3, further comprising a GSM module that sends an alert containing a GPS position when the anomaly score exceeds a threshold.
+------------------------------------------------------------------------

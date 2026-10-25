@@ -10,8 +10,8 @@ novelty checking, and a full literature review — each one grounded in passages
 it can quote, plus an evaluation dashboard that measures retrieval quality with
 real IR metrics.
 
-**Everything below runs end to end today**, offline if necessary: 655 backend
-tests and 144 frontend tests pass with no API key, no model download, and no
+**Everything below runs end to end today**, offline if necessary: 683 backend
+tests and 145 frontend tests pass with no API key, no model download, and no
 network (plus 9 Postgres contract tests that run when a test database is
 configured — they pass against PostgreSQL 16).
 
@@ -20,6 +20,10 @@ deployment the same code switches on, by configuration only, **Better Auth**
 sign-in, a **Supabase** Postgres store, **Cloudflare** hosting for the
 frontend, **Fly.io** for the API and **Google Analytics** — see
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+A single-user demo is live at **https://mairos.vercel.app**: the website on
+Vercel, the API on the project owner's PC through a Cloudflare tunnel, up while
+that PC runs it ([docs/LIVE_DEMO.md](docs/LIVE_DEMO.md)).
 
 ---
 
@@ -88,7 +92,7 @@ is no CORS setup and no base URL to configure.
 curl http://localhost:8000/api/health
 # {"status":"ok","llm":{"provider":"groq","model":"llama-3.3-70b-versatile","live":true}, ...}
 
-cd mairos && python -m pytest -q     # 655 tests, no network or API key needed
+cd mairos && python -m pytest -q     # 683 tests, no network or API key needed
 ```
 
 ---
@@ -529,6 +533,19 @@ covered by a test or was confirmed in a browser:
 | Graph names from `gpt-oss` used U+2011 non-breaking hyphens ("retrieval‑augmented approach"), seen in the live confirmation run | They never matched "retrieval-augmented" in a document or question, so graph-boosted retrieval skipped them, and a second spelling could become a duplicate node | Names are folded to ASCII hyphens and spaces (`services/common/text.py`) wherever the graph is written or queried; graph files saved earlier merge their look-alike nodes on load, summing mentions |
 | The export dialog returned focus to `<body>` on close | A keyboard user lost their place in the page | Focus returns to the control that opened it |
 
+### Found by the sample-project walkthrough
+
+Running [docs/SAMPLE_PROJECT_WALKTHROUGH.md](docs/SAMPLE_PROJECT_WALKTHROUGH.md)
+through the API (25 October 2026) turned up four defects. Each was reproduced,
+fixed, and given a regression test that fails on the old code:
+
+| Found | Why it mattered | Fix |
+|---|---|---|
+| *Generate hypotheses* checked the request ("what hypotheses follow…?") against the corpus instead of the hypotheses | The answer opened with "Not found in this project's sources (0% wording overlap)" about the question, and no hypothesis was ever checked. The hypothesis step stores `{"hypotheses": [...]}`; the novelty step looked for a bare list, and its unit test supplied one | The novelty step reads the hypothesis step's real output and never scores the request in their place; the new tests chain the real agents and run the flow end to end |
+| A text file renamed to `.pdf` answered a bare 500 | On Windows MuPDF still held the rejected file while the route deleted it, so that error replaced the real one, the file stayed behind locked, and deleting the project failed with a 503 | PDFs are opened from memory; a file that is not a readable PDF, or is password-protected, gets a 400 saying so, and a failed clean-up is logged instead of replacing the error |
+| Evaluation showed 0.000 for every metric when no golden-set case applied to the corpus | An average of nothing was reported as 0.0, so a retriever that was never measured read as one that failed | No case to average means no metric: the API returns `null`, and the dashboard shows "—" with a note |
+| Extracted text kept typographic ligatures (*ﬁ*, *ﬂ*) | "flagged" was stored as "ﬂagged", so a search or a question for the word could miss it; many real papers are set this way | The extractor expands ligatures into plain letters |
+
 ---
 
 ## Authentication (optional)
@@ -637,6 +654,9 @@ stage, what it produced — and see the accumulated graph in **Knowledge Graph**
 
 The full demonstration sequence, including the research workflows and the
 evaluation dashboard, is in **[docs/DEMONSTRATION.md](docs/DEMONSTRATION.md)**.
+To check every feature by hand with a ready-made sample project, files
+included, follow
+**[docs/SAMPLE_PROJECT_WALKTHROUGH.md](docs/SAMPLE_PROJECT_WALKTHROUGH.md)**.
 
 ---
 
@@ -861,13 +881,13 @@ four-panel UI) and the Stage 1 UI/UX pass documented above.
 
 ```bash
 cd mairos
-python -m pytest -q            # 655 backend tests (+9 Postgres, skipped without a test DB)
+python -m pytest -q            # 683 backend tests (+9 Postgres, skipped without a test DB)
 python -m pytest tests/test_agents.py -v
 
 # Run the store contract against a real Postgres too:
 MAIROS_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_database_contract.py
 
-cd apps/web && npm test        # 144 frontend tests (Vitest + Testing Library)
+cd apps/web && npm test        # 145 frontend tests (Vitest + Testing Library)
 npx tsc --noEmit && npm run build
 ```
 
@@ -919,10 +939,12 @@ patent overlap cannot get it into the report.
 - **Persistence is SQLite** (`apps/api/data/mairos.db`) by default, written one
   row per mutation with WAL enabled, or Supabase Postgres via `DATABASE_URL`.
   An existing `state.json` is imported once on first start and then left alone.
-- **The deployment path is built and tested piecewise, not deployed.** The
-  Cloudflare bundle builds, the Postgres store passes its contract against
+- **The multi-user deployment is built and tested piecewise, not deployed.**
+  The Cloudflare bundle builds, the Postgres store passes its contract against
   PostgreSQL 16, and JWT verification is tested with real signatures; an actual
-  deploy needs your Cloudflare, Fly.io and Supabase accounts.
+  deploy needs your Cloudflare, Fly.io and Supabase accounts. What is deployed
+  is the single-user demo ([docs/LIVE_DEMO.md](docs/LIVE_DEMO.md)): no
+  sign-in, and up only while the owner's PC runs the API.
 - **No OCR.** Scanned PDFs return HTTP 422 with an explanatory message.
 - **Tasks run in-process** via FastAPI `BackgroundTasks`; a restart mid-run
   loses that run's progress.

@@ -1,17 +1,20 @@
 # Roadmap to completion
 
-Current state: **≈ 95%** of the full project scope. 655 backend and 144
+Current state: **93.75%** — 30 of the 32 required items. 683 backend and 145
 frontend tests pass offline (plus 9 Postgres contract tests that pass against
 a real PostgreSQL 16 server), TypeScript is clean under `strict`, and both the
 production Next.js build and the Cloudflare Worker bundle build.
 
-**Why 95% and not 100%.** Every build item is complete and tested. What is
-missing is a *measurement*: live-model validation over 15–20 real papers and a
+**Why not 100%.** Every build item is complete and tested. Two items are open.
+One is a *measurement*: live-model validation over 15–20 real papers and a
 RAGAS run. The harness for both is written and tested; the numbers have not
-been taken. Counting the project as finished because the code to measure it
-exists would be exactly the overclaim the rest of this system is built to
-avoid. (The original Stage B plan sets this rule explicitly: "treat the project
-as 95% rather than 100%" until the figures exist.)
+been taken. The other is a full manual pass of the latest build, which
+`docs/SAMPLE_PROJECT_WALKTHROUGH.md` now scripts from start to finish.
+Counting the project as finished because the code to measure it exists would
+be exactly the overclaim the rest of this system is built to avoid. (The
+original Stage B plan sets this rule explicitly: "treat the project as 95%
+rather than 100%" until the figures exist. The exact count sits just under
+that ceiling.)
 
 ---
 
@@ -19,7 +22,7 @@ as 95% rather than 100%" until the figures exist.)
 
 | # | Work item | Status | Evidence |
 |---|---|---|---|
-| 1 | Frontend test suite + CI | ✅ Complete | 144 Vitest tests incl. axe-core WCAG 2.1 AA; `.github/workflows/ci.yml` runs pytest, `npm test`, `tsc` and the build |
+| 1 | Frontend test suite + CI | ✅ Complete | 145 Vitest tests incl. axe-core WCAG 2.1 AA; `.github/workflows/ci.yml` runs pytest, `npm test`, `tsc` and the build |
 | 2 | Live-model validation, recorded | ⚠️ **Harness complete, numbers pending** | `scripts/live_validation.py` + 10 tests. See below. |
 | 3 | RAGAS wired | ✅ Complete (no live run yet) | `services/evaluation/ragas_runner.py`, labelled model-judged |
 | 4 | SQLite persistence | ✅ Complete | `app/db.py`, `app/store.py` |
@@ -53,6 +56,7 @@ as 95% rather than 100%" until the figures exist.)
 | Cloudflare frontend (OpenNext) | ✅ Bundle builds; not deployed | `npm run cf:build` |
 | Fly.io API | ✅ Dockerfile + `fly.toml`; not deployed | `docs/DEPLOYMENT.md` |
 | Google Analytics | ✅ Page views only, opt-in | `components/Analytics.tsx` |
+| Single-user demo: Vercel site, API on the owner's PC via a Cloudflare quick tunnel | ✅ Live since 25 Oct 2026, no sign-in | `docs/LIVE_DEMO.md`, `scripts/publish_demo.py` |
 
 ---
 
@@ -62,7 +66,8 @@ as 95% rather than 100%" until the figures exist.)
 |---|---|
 | Live-model validation figures | 15–20 real, text-based PDFs on one topic, a live `GROQ_API_KEY`, then `python scripts/live_validation.py --corpus <folder> --out docs/results_data.json --markdown docs/results_summary.md`. Paste the table into section 2 of `docs/RESULTS.md` with date, model and corpus. |
 | RAGAS figures | `pip install "ragas>=0.2,<1"`, then one evaluation run with `answer_quality: true` on that corpus. |
-| A real deployment | Your Supabase, Fly.io and Cloudflare accounts; follow `docs/DEPLOYMENT.md`. |
+| A full manual pass of the latest build | Follow `docs/SAMPLE_PROJECT_WALKTHROUGH.md` on the live demo or locally, and fill in its checklist. |
+| A multi-user deployment | Your Supabase, Fly.io and Cloudflare accounts; follow `docs/DEPLOYMENT.md`. The single-user demo is already live (`docs/LIVE_DEMO.md`). |
 | CI running for real | The project is a local git repository from 25 October 2026. Push it to a GitHub repository and `.github/workflows/ci.yml` runs both suites, the type check and the build on every push. |
 | RAGAS in the project's own environment | RAGAS is installed in the system Python but not in `mairos/.venv`, which the API runs from: `.venv\Scripts\python.exe -m pip install "ragas>=0.2,<1"`. |
 

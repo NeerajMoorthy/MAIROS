@@ -1,0 +1,1 @@
+This is a plain text file renamed to .pdf, for testing how MAIROS handles a file that is not a PDF. Uploading it must fail with a readable error.

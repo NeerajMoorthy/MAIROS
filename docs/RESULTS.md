@@ -3,7 +3,7 @@
 This document separates two things that are easy to conflate: what MAIROS has
 **proven**, and what it has only **demonstrated**.
 
-- **Proven** — 799 automated tests (655 backend, 144 frontend) that run with
+- **Proven** — 828 automated tests (683 backend, 145 frontend) that run with
   no API key, no network and no model download, plus 9 Postgres contract tests
   run against a real PostgreSQL 16 server. They assert the system's own
   guarantees: routing decisions, retrieval ranking, evidence linking, the
@@ -41,20 +41,21 @@ evaluation on your own corpus to get figures for it.
 
 | Suite | Count | Scope |
 |---|---|---|
-| Backend (`pytest`) | 655 passed, 9 skipped | Agents, flows, retrieval, evaluation maths, API contracts, regressions |
+| Backend (`pytest`) | 683 passed, 9 skipped | Agents, flows, retrieval, evaluation maths, API contracts, regressions |
 | — of which `test_patents.py` | 62 | Segmentation, scoring, metadata, exports, disclaimer surface, legal-wording audit |
 | — of which `test_auth.py` | 15 | JWT verification and per-user isolation |
 | — of which `test_database_contract.py` | 13 (+9 Postgres) | One store contract for SQLite and Postgres; the 9 skipped run when `MAIROS_TEST_DATABASE_URL` is set and passed against PostgreSQL 16 |
 | — of which `test_literature_sources.py` | 55 | Three-source parsing, link allowlist, de-duplication and ranking, query planning, coverage report, unavailable sources |
 | — of which `test_project_flow.py` | 26 | Intake grounding, project routing, the `project` flow end to end |
 | — of which `test_review_fixes.py` | 30 | One regression test per finding of the independent review of the literature search and project review |
+| — of which `test_sample_project.py` | 17 | The walkthrough's sample files: pages, chunks, titles, the figures answers are checked against, no ligatures, the files that must be refused, the contributions the intake rules read, the patent's claim dependencies |
 | — of which `test_project_export.py` | 15 | Project data export: contents, provenance, no truncation, true manifest hashes, originals, isolation |
-| — of which `test_project_lifecycle.py` | 6 | Deletion cascade, upload storage, empty-project evidence boundary |
-| — of which `test_novelty.py` | 63 | The novelty boundary end to end, the `review` chain, routing |
+| — of which `test_project_lifecycle.py` | 8 | Deletion cascade, upload storage, files that are not readable PDFs, empty-project evidence boundary |
+| — of which `test_novelty.py` | 65 | The novelty boundary end to end, the `review` chain, routing |
 | — of which `test_persistence.py` | 20 | Restart durability, `state.json` migration, concurrency |
 | — of which `test_security.py` | 57 | Body caps, rate limits, CORS, request logging, outage handling |
 | — of which `test_theme_contrast.py` | 52 | WCAG AA contrast of every theme token, computed from the stylesheet |
-| Frontend (`vitest`) | 144 | Every panel's states; the Patents page in every state; axe-core WCAG 2.1 AA; the legal-wording audit over rendered patent output |
+| Frontend (`vitest`) | 145 | Every panel's states; the Patents page in every state; axe-core WCAG 2.1 AA; the legal-wording audit over rendered patent output |
 
 `.github/workflows/ci.yml` is set up to run both suites, the type check and the
 production build on every push and pull request — but only once the repository

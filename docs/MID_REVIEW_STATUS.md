@@ -1,18 +1,21 @@
 # Project Status
 
 Current as of 25 October 2026 (the Stage B build plus the literature-search
-additions below). **655 backend tests**
+additions below). **683 backend tests**
 (`python -m pytest -q`, plus 9 Postgres contract tests that run against a test
-database) and **144 frontend tests** (`cd apps/web && npm test`) pass offline —
+database) and **145 frontend tests** (`cd apps/web && npm test`) pass offline —
 no API key, no model download, no network. TypeScript is clean under `strict`;
 the production build and the Cloudflare Worker bundle both build.
 
-Project completion: **≈ 95%** of full scope. Patent awareness is complete
-(segmentation, scoring, metadata, Patents page, export, disclaimer and wording
-audits), and the optional deployment stack — Better Auth, Supabase, Cloudflare,
-Fly.io, Google Analytics — is built and tested but not deployed. What remains
-is the live-model validation and RAGAS *runs*: the harness is tested, but the
-figures need 15–20 real papers and the project owner's model key. See
+Project completion: **93.75%** — 30 of the 32 required items. Patent awareness
+is complete (segmentation, scoring, metadata, Patents page, export, disclaimer
+and wording audits), and the optional deployment stack — Better Auth,
+Supabase, Cloudflare, Fly.io, Google Analytics — is built and tested but not
+deployed. A single-user demo has been live since 25 October 2026 at
+https://mairos.vercel.app (`docs/LIVE_DEMO.md`). The two items left are the
+live-model validation and RAGAS *runs* — the harness is tested, but the
+figures need 15–20 real papers and the project owner's model key — and a full
+manual pass of the latest build with `docs/MANUAL_TEST_PACK.md`. See
 `docs/RESULTS.md` and `docs/ROADMAP.md`.
 
 Added since Stage B (23–25 October 2026): literature search now covers arXiv,

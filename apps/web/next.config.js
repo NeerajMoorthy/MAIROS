@@ -2,9 +2,10 @@
 const { PHASE_DEVELOPMENT_SERVER } = require("next/constants");
 
 // Where /api/* is proxied. Local default: the uvicorn dev server. In
-// production: the Fly.io app, e.g. https://mairos-api.fly.dev. Read when the
-// config is evaluated, which for a Cloudflare deployment is build time — set
-// it in the build environment, not only as a Worker variable.
+// production: the Fly.io app, e.g. https://mairos-api.fly.dev, or for the
+// Vercel demo the tunnel set by scripts/publish_demo.py. Read when the config
+// is evaluated, which on Vercel and Cloudflare is build time — set it in the
+// build environment, not only as a Worker variable.
 const API_URL = (
   process.env.MAIROS_API_URL ||
   process.env.NEXT_PUBLIC_API_URL || // older name, still honoured

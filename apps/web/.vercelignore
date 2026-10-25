@@ -1,0 +1,9 @@
+# Not uploaded by `vercel deploy`: Vercel installs dependencies and runs
+# `next build` itself, and local env files must never leave this machine.
+node_modules
+.next
+.next-dev
+.open-next
+.wrangler
+.env*
+*.tsbuildinfo

@@ -16,12 +16,16 @@ venv/
 # Runtime data (Chroma index, knowledge graphs, uploads, state snapshot)
 apps/api/data/
 
+# Deployment bundles assembled from the repository (scripts/build_hf_space.py)
+build/
+
 # Node
 node_modules/
 .next/
 .next-dev/
 .open-next/
 .wrangler/
+.vercel/
 .dev.vars
 out/
 npm-debug.log*
