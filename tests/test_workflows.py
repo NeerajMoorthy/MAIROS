@@ -887,6 +887,44 @@ class TestWorkflowAPI:
         agents = {event["agent_name"] for event in result["events"]}
         assert {"gaps", "hypothesis"} <= agents
 
+    def test_hypothesis_flow_checks_the_hypotheses_not_the_request(self, client, tmp_path):
+        """Regression (walkthrough K1): the answer opened with a coverage verdict
+        on the request itself — "what should we investigate next? — Not found in
+        this project's sources (0% wording overlap)" — instead of on the
+        hypotheses the flow had just proposed."""
+        import fitz  # PyMuPDF
+
+        pdf = tmp_path / "rail.pdf"
+        doc = fitz.open()
+        doc.new_page().insert_textbox(
+            fitz.Rect(72, 72, 520, 770),
+            "Camera inspection of rail heads. A limitation of this study is that all "
+            "images were captured in daylight, so performance at night is unknown.",
+            fontsize=11,
+        )
+        doc.save(pdf)
+        doc.close()
+
+        project_id = client.post("/api/projects", json={"name": "Rail"}).json()["id"]
+        with open(pdf, "rb") as handle:
+            client.post(
+                f"/api/projects/{project_id}/documents",
+                files={"file": ("rail.pdf", handle, "application/pdf")},
+            )
+        request = "what should we investigate next?"
+        task = client.post(
+            f"/api/projects/{project_id}/tasks", json={"question": request, "flow": "hypothesis"}
+        ).json()
+
+        result = client.get(f"/api/tasks/{task['id']}").json()["result"]
+        hypotheses = [h["statement"] for h in result["hypotheses"]["hypotheses"]]
+        assessments = result["novelty"]["assessments"]
+
+        assert hypotheses, "the paper states a limitation, so a hypothesis must follow"
+        assert [a["claim"] for a in assessments] == hypotheses
+        assert {a["origin"] for a in assessments} == {"hypothesis"}
+        assert request not in result["answer"]
+
     def test_experiment_flow_runs_the_whole_chain(self, client, sample_pdf):
         project_id = client.post("/api/projects", json={"name": "Experiments"}).json()["id"]
         with open(sample_pdf, "rb") as handle:

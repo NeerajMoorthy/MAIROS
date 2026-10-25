@@ -83,6 +83,43 @@ class TestUploadStorage:
         assert len(stored) == 1
         assert long_name not in stored[0].name and len(stored[0].name) <= 36
 
+    def test_a_file_that_is_not_a_pdf_is_refused_readably_and_leaves_nothing(self, client):
+        """Regression (walkthrough K2): a text file renamed to .pdf answered a
+        bare 500, the stored file stayed behind (locked on Windows), and
+        deleting the project then failed with a 503 until the lock was freed."""
+        from app.config import settings
+
+        project_id = client.post("/api/projects", json={"name": "Not a PDF"}).json()["id"]
+        response = client.post(
+            f"/api/projects/{project_id}/documents",
+            files={"file": ("notes.pdf", b"This is a plain text file renamed to .pdf.", "application/pdf")},
+        )
+
+        assert response.status_code == 400, response.text
+        assert "not a readable PDF" in response.json()["detail"]
+        assert metadata_store.list_documents(project_id) == []
+        upload_folder = settings.upload_dir / project_id
+        assert not upload_folder.exists() or not any(upload_folder.iterdir())
+        assert client.delete(f"/api/projects/{project_id}").status_code == 204
+
+    def test_a_password_protected_pdf_is_refused_with_the_reason(self, client):
+        import fitz  # PyMuPDF
+
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), "Results that need a password.")
+        locked = doc.tobytes(encryption=fitz.PDF_ENCRYPT_AES_256, user_pw="u", owner_pw="o")
+        doc.close()
+
+        project_id = client.post("/api/projects", json={"name": "Locked"}).json()["id"]
+        response = client.post(
+            f"/api/projects/{project_id}/documents",
+            files={"file": ("locked.pdf", locked, "application/pdf")},
+        )
+
+        assert response.status_code == 400, response.text
+        assert "password-protected" in response.json()["detail"]
+        assert metadata_store.list_documents(project_id) == []
+
 
 class TestEmptyProjectEvidenceBoundary:
     def test_a_new_project_cites_nothing_even_when_another_project_could(self, client, sample_pdf):

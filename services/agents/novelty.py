@@ -120,22 +120,25 @@ class NoveltyAgent(BaseAgent):
     def _claims(ctx: AgentContext) -> list[dict]:
         """The statements to assess, newest chain first.
 
-        Hypotheses are preferred when the flow generated them — assessing "is
-        this hypothesis already in the corpus?" is far more useful than
-        assessing the user's phrasing of the request. A parsed project brief
-        comes next: its stated contributions are the claims a student wants
-        checked, and the whole pasted description is far too long to score as
-        one claim.
+        When the flow ran the hypothesis step, its hypotheses are what get
+        assessed — "is this hypothesis already in the corpus?" is far more
+        useful than scoring the user's phrasing of the request. The request
+        ("what hypotheses follow…?") is not a claim, so it is never scored in
+        their place, even when no hypothesis could be proposed. A parsed
+        project brief comes next: its stated contributions are the claims a
+        student wants checked, and the whole pasted description is far too
+        long to score as one claim.
         """
-        hypotheses = ctx.intermediate_results.get("hypotheses")
-        if isinstance(hypotheses, list) and hypotheses:
+        # HypothesisAgent stores {"hypotheses": [...]} — the same payload the
+        # experiment step and the API response read.
+        generated = ctx.intermediate_results.get("hypotheses")
+        if isinstance(generated, dict):
             claims = [
                 {"claim": str(item.get("statement", "")).strip(), "origin": "hypothesis"}
-                for item in hypotheses
+                for item in generated.get("hypotheses") or []
                 if isinstance(item, dict) and str(item.get("statement", "")).strip()
             ]
-            if claims:
-                return claims[:MAX_CLAIMS]
+            return claims[:MAX_CLAIMS]
 
         brief = ctx.intermediate_results.get("project_brief") or {}
         stated = [str(c).strip() for c in brief.get("contributions") or [] if str(c).strip()]
@@ -384,11 +387,16 @@ class NoveltyAgent(BaseAgent):
         scope = self._scope_text(sources, papers)
 
         if not claims:
+            ran_hypotheses = isinstance(ctx.intermediate_results.get("hypotheses"), dict)
             ctx.intermediate_results["novelty"] = {
                 "scope": scope,
                 "assessments": [],
                 "field_novelty": FIELD_NOVELTY,
-                "note": "Nothing to assess — no claim was supplied.",
+                "note": (
+                    "No hypothesis was proposed, so there was nothing to check against the corpus."
+                    if ran_hypotheses
+                    else "Nothing to assess — no claim was supplied."
+                ),
             }
             ctx.log(self.name, "No claim to assess", self.stage)
             return ctx

@@ -96,18 +96,19 @@ def evaluate_ranking(
     }
 
 
-def aggregate(per_case: Sequence[dict[str, float]], k: int = 5) -> dict[str, float]:
+def aggregate(per_case: Sequence[dict[str, float]], k: int = 5) -> dict[str, float | int | None]:
     """Mean of each metric across cases; MRR is the mean reciprocal rank.
 
-    An empty input returns zeros rather than raising, so a project with no
-    evaluable cases still renders a dashboard instead of an error.
+    With no case to average, every metric is ``None`` rather than an error or
+    a zero: nothing was measured, and 0.0 would read as a measured failure of
+    the retriever. The dashboard shows "—" for it.
     """
     if not per_case:
         return {
-            f"recall_at_{k}": 0.0,
-            f"precision_at_{k}": 0.0,
-            "mrr": 0.0,
-            f"ndcg_at_{k}": 0.0,
+            f"recall_at_{k}": None,
+            f"precision_at_{k}": None,
+            "mrr": None,
+            f"ndcg_at_{k}": None,
             "cases_evaluated": 0,
         }
 

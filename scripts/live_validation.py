@@ -245,14 +245,19 @@ def render_markdown(report: RunReport) -> str:
     evaluation = report.evaluation or {}
     if evaluation.get("aggregates"):
         agg = evaluation["aggregates"]
+
+        def metric(name: str):
+            # A metric no case could be scored on is None: a dash, never 0.
+            return "—" if agg.get(name) is None else agg[name]
+
         lines += [
             "",
             "### Retrieval quality on this corpus",
             "",
             "| Recall@5 | Precision@5 | MRR | nDCG@5 | Cases scored | Not in corpus |",
             "|---|---|---|---|---|---|",
-            f"| {agg.get('recall_at_5')} | {agg.get('precision_at_5')} | {agg.get('mrr')} | "
-            f"{agg.get('ndcg_at_5')} | {evaluation.get('cases_evaluated')} | "
+            f"| {metric('recall_at_5')} | {metric('precision_at_5')} | {metric('mrr')} | "
+            f"{metric('ndcg_at_5')} | {evaluation.get('cases_evaluated')} | "
             f"{evaluation.get('cases_unsupported')} |",
         ]
 

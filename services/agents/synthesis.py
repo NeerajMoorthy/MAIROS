@@ -123,6 +123,8 @@ class SynthesisAgent(BaseAgent):
             "that claim.",
             "",
         ]
+        if not assessments and report.get("note"):
+            lines.extend([report["note"], ""])
 
         for assessment in assessments:
             lines.append(f"**{assessment['claim']}**")

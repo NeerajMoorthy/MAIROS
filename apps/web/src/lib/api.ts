@@ -554,7 +554,8 @@ export interface EvalReport {
   project_id: string;
   corpus_chunks: number;
   golden_set: { size: number; path: string; name?: string; relevance_policy?: string; notes?: string };
-  aggregates: Record<string, number>;
+  /** A metric is null when no case could be scored: nothing was measured. */
+  aggregates: Record<string, number | null>;
   ragas: AnswerQuality;
   cases: EvalCaseResult[];
   cases_total: number;

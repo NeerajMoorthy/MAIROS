@@ -8,6 +8,7 @@ show it live.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 
@@ -18,11 +19,25 @@ from starlette.concurrency import run_in_threadpool
 from app.config import settings
 from app.dependencies import get_chroma_store
 from app.store import metadata_store
+from services.ingestion.extractor import UnreadablePDFError
 from services.ingestion.pipeline import IngestionPipeline
 
 from .tasks import dispatch_pipeline
 
 router = APIRouter(tags=["ingest"])
+logger = logging.getLogger("mairos.ingest")
+
+
+def _discard(path: Path) -> None:
+    """Remove an upload that will not be kept, without hiding why it is not kept.
+
+    Called while an ingestion error is being turned into a response: a failure
+    to delete must not replace that error, so it is logged instead.
+    """
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("could not remove the rejected upload %s", path.name, exc_info=True)
 
 
 class IngestResponse(BaseModel):
@@ -91,14 +106,19 @@ async def ingest_document(
         result = await run_in_threadpool(
             pipeline.ingest, pdf_path=file_path, project_id=project_id, document_name=filename
         )
+    except UnreadablePDFError as exc:
+        # Not a PDF, damaged, or password-protected: the user's file, so a 400
+        # with a message they can act on.
+        _discard(file_path)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        file_path.unlink(missing_ok=True)
+        _discard(file_path)
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}") from exc
 
     if result["num_chunks"] == 0:
         # Nothing was indexed, so keep nothing: an orphaned upload would only
         # be found again by project deletion.
-        file_path.unlink(missing_ok=True)
+        _discard(file_path)
         raise HTTPException(
             status_code=422,
             detail=(

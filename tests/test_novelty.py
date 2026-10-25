@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from services.agents.base import AgentContext
+from services.agents.hypothesis import HypothesisAgent
 from services.agents.novelty import (
     COVERED_THRESHOLD,
     FIELD_NOVELTY,
@@ -224,16 +225,55 @@ class TestCorpusCoverage:
     async def test_hypotheses_are_assessed_in_preference_to_the_question(self):
         ctx = make_ctx(
             "what should we try next?",
-            hypotheses=[
-                {"statement": "Retrieval augmented generation reduces hallucination."},
-                {"statement": "Quantum annealing improves ribosome kinetics."},
-            ],
+            # The shape HypothesisAgent stores, not a bare list.
+            hypotheses={
+                "hypotheses": [
+                    {"statement": "Retrieval augmented generation reduces hallucination."},
+                    {"statement": "Quantum annealing improves ribosome kinetics."},
+                ]
+            },
         )
         report = await assess(ctx)
 
         assert [a["origin"] for a in report["assessments"]] == ["hypothesis", "hypothesis"]
         assert report["assessments"][0]["verdict"] == "covered_in_corpus"
         assert report["assessments"][1]["verdict"] == "not_found_in_corpus"
+
+    @pytest.mark.asyncio
+    async def test_the_hypothesis_steps_own_output_is_what_gets_assessed(self):
+        """Regression (walkthrough K1). The hypothesis step stores
+        ``{"hypotheses": [...]}``; this step looked for a bare list, never found
+        one, and scored the request "what hypotheses follow…?" as the claim.
+        Chaining the real agents keeps both sides of that contract in one test.
+        """
+        ctx = make_ctx("What hypotheses follow from the gaps in this literature?")
+        ctx.intermediate_results["gaps"] = {
+            "gaps": [
+                {
+                    "id": "GAP1",
+                    "gap": "Retrieval quality under paraphrased questions is not yet measured.",
+                    "source_document": "RAG Paper",
+                    "citation": {"chunk_id": "c1", "document_name": "RAG Paper", "page": 1},
+                }
+            ],
+            "graph_signals": [],
+        }
+        await HypothesisAgent(llm=OfflineChatModel()).run(ctx)
+        report = await assess(ctx)
+
+        statements = [h["statement"] for h in ctx.intermediate_results["hypotheses"]["hypotheses"]]
+        assert statements, "a quoted gap must yield a hypothesis"
+        assert [a["claim"] for a in report["assessments"]] == statements
+        assert {a["origin"] for a in report["assessments"]} == {"hypothesis"}
+
+    @pytest.mark.asyncio
+    async def test_a_hypothesis_step_that_proposed_nothing_leaves_the_request_unscored(self):
+        ctx = make_ctx("What hypotheses follow from the gaps in this literature?")
+        await HypothesisAgent(llm=OfflineChatModel()).run(ctx)  # no gaps, so no hypotheses
+        report = await assess(ctx)
+
+        assert report["assessments"] == []
+        assert report["note"].startswith("No hypothesis was proposed")
 
     @pytest.mark.asyncio
     async def test_how_the_question_is_phrased_does_not_change_the_verdict(self):

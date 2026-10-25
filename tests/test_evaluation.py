@@ -87,8 +87,14 @@ class TestMetrics:
         assert agg["mrr"] == 0.5
         assert agg["cases_evaluated"] == 2
 
-    def test_aggregate_of_nothing_is_zero_not_an_error(self):
-        assert aggregate([], k=5)["cases_evaluated"] == 0
+    def test_aggregate_of_nothing_is_unmeasured_not_zero(self):
+        """Regression (walkthrough K3): with no case to average, the metrics were
+        0.0, which the dashboard printed as a measured 0.000."""
+        agg = aggregate([], k=5)
+
+        assert agg["cases_evaluated"] == 0
+        for name in ("recall_at_5", "precision_at_5", "mrr", "ndcg_at_5"):
+            assert agg[name] is None
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +240,21 @@ class TestRetrievalEvaluator:
         ).run()
         assert report.aggregates["recall_at_5"] == 0.0
         assert report.aggregates["mrr"] == 0.0
+
+    def test_a_corpus_no_case_applies_to_reports_no_metric(self, tmp_path):
+        """Regression (walkthrough K3). The opposite of the test above: here no
+        case has evidence in the corpus at all, so the retriever was never
+        measured. The railway sample project is such a corpus, and its
+        dashboard showed 0.000 for every metric."""
+
+        def railway():
+            return [{"chunk_id": "r1", "text": "Camera inspection of rail heads.", "document_name": "rail.pdf"}]
+
+        report = RetrievalEvaluator(lambda q, k: [], railway, self._golden(tmp_path), k=5).run()
+
+        assert report.supported_cases == []
+        for name in ("recall_at_5", "precision_at_5", "mrr", "ndcg_at_5"):
+            assert report.aggregates[name] is None
 
 
 # ---------------------------------------------------------------------------

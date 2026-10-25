@@ -46,8 +46,8 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
   );
 }
 
-function pct(value: number | undefined): string {
-  return value === undefined ? "—" : value.toFixed(3);
+function pct(value: number | null | undefined): string {
+  return value == null ? "—" : value.toFixed(3);
 }
 
 function CaseRow({ result }: { result: EvalCaseResult }) {
@@ -304,6 +304,12 @@ export default function EvaluationPage() {
                   hint="ranking quality"
                 />
               </div>
+              {report.cases_evaluated === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No case in the golden set has evidence in this project&apos;s documents, so no metric
+                  could be computed. That says nothing about how well retrieval works here.
+                </p>
+              )}
 
               {/* Model-judged scores are kept visually separate from the
                   computed ones above — they are a different kind of number. */}

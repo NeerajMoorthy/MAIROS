@@ -126,6 +126,32 @@ describe("Evaluation page", () => {
     expect(screen.getByText(/Excluded from the aggregates/i)).toBeInTheDocument();
   });
 
+  it("shows a dash, not 0.000, when no case could be scored", async () => {
+    // Regression (walkthrough K3): a corpus none of the cases applies to showed
+    // 0.000 for every metric, which reads as a measured failure.
+    const user = userEvent.setup();
+    const unsupported = anEvalReport().cases.filter((c) => !c.supported);
+    mocked.runEvaluation.mockResolvedValue(
+      anEvalReport({
+        aggregates: { recall_at_5: null, precision_at_5: null, mrr: null, ndcg_at_5: null, cases_evaluated: 0 },
+        cases: unsupported,
+        cases_total: unsupported.length,
+        cases_evaluated: 0,
+        cases_unsupported: unsupported.length,
+      }),
+    );
+
+    render(<EvaluationPage />);
+    await user.click(await screen.findByRole("button", { name: /Run evaluation/i }));
+
+    expect(await screen.findByText("Recall@5")).toBeInTheDocument();
+    expect(screen.queryByText("0.000")).not.toBeInTheDocument();
+    for (const label of ["Recall@5", "MRR", "Precision@5", "nDCG@5"]) {
+      expect(screen.getByText(label).parentElement).toHaveTextContent("—");
+    }
+    expect(screen.getByText(/no metric\s+could be computed/i)).toBeInTheDocument();
+  });
+
   it("reveals which passages a case retrieved and which counted", async () => {
     const user = userEvent.setup();
     mocked.runEvaluation.mockResolvedValue(anEvalReport());
