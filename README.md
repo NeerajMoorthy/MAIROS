@@ -10,7 +10,7 @@ novelty checking, and a full literature review — each one grounded in passages
 it can quote, plus an evaluation dashboard that measures retrieval quality with
 real IR metrics.
 
-**Everything below runs end to end today**, offline if necessary: 652 backend
+**Everything below runs end to end today**, offline if necessary: 655 backend
 tests and 144 frontend tests pass with no API key, no model download, and no
 network (plus 9 Postgres contract tests that run when a test database is
 configured — they pass against PostgreSQL 16).
@@ -88,7 +88,7 @@ is no CORS setup and no base URL to configure.
 curl http://localhost:8000/api/health
 # {"status":"ok","llm":{"provider":"groq","model":"llama-3.3-70b-versatile","live":true}, ...}
 
-cd mairos && python -m pytest -q     # 652 tests, no network or API key needed
+cd mairos && python -m pytest -q     # 655 tests, no network or API key needed
 ```
 
 ---
@@ -472,6 +472,7 @@ chunk count where a document count was meant.
 | Graph hits never boosted a fetched abstract — a live run used 21 graph relations and boosted 0 passages | The graph cites an abstract by its document id; the index holds it as `<id>_0`, `_1`, so chunk ids never matched (this predates multi-source search) | A graph source id also matches a chunk's document id; an upload is still matched chunk by chunk |
 | In the `project` flow the knowledge graph was built after `gaps` | Live, the gap agent's graph signals came from an empty graph and the section was blank | The graph is built straight after indexing; the same live run then showed thin-coverage and never-compared-method signals |
 | `ARXIV_MAX_RESULTS` / `ARXIV_TIMEOUT` named one source | They no longer described what a search does | Replaced by `LITERATURE_*` settings; the old names are ignored |
+| The answer's "Searched:" line listed every source that answered as where the kept papers came from | Live (25 Oct): "8 abstract(s) from arXiv, OpenAlex" when all 8 came from OpenAlex — arXiv answered, but none of its papers ranked high enough | The line names the sources searched and, separately, where the kept papers came from: "arXiv and OpenAlex (4 queries, …); kept 8 abstract(s), all from OpenAlex" |
 
 ### Found in the independent review of literature search and project review
 
@@ -860,7 +861,7 @@ four-panel UI) and the Stage 1 UI/UX pass documented above.
 
 ```bash
 cd mairos
-python -m pytest -q            # 652 backend tests (+9 Postgres, skipped without a test DB)
+python -m pytest -q            # 655 backend tests (+9 Postgres, skipped without a test DB)
 python -m pytest tests/test_agents.py -v
 
 # Run the store contract against a real Postgres too:

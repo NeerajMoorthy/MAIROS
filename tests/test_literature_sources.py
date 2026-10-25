@@ -380,6 +380,46 @@ class TestCoverage:
         assert "nothing was searched" in report["warnings"][0]
         assert describe_scope(report) == "no literature source (none could be reached)"
 
+    def test_the_scope_line_keeps_what_was_searched_apart_from_what_was_kept(self):
+        """Live, 25 Oct: arXiv and OpenAlex answered, all 8 kept papers came from
+        OpenAlex, and the answer said "8 abstract(s) from arXiv, OpenAlex"."""
+        report = build_coverage(
+            [{"text": f"query {i}", "written_by": "model"} for i in range(4)],
+            [_run("arxiv", n=20), _run("openalex", n=20), _run("semantic_scholar", "rate_limited")],
+            39,
+            self._papers(8),
+            1,
+            today=self.TODAY,
+        )
+        assert describe_scope(report) == (
+            "arXiv and OpenAlex (4 queries, 2026-10-22); kept 8 abstract(s), all from OpenAlex"
+        )
+
+    def test_the_scope_line_counts_each_source_of_the_kept_papers(self):
+        kept = [
+            {"title": "A", "year": "2024", "abstract": "x", "sources": ["arXiv", "OpenAlex"]},
+            {"title": "B", "year": "2024", "abstract": "x", "sources": ["Semantic Scholar"]},
+        ]
+        report = build_coverage(
+            [{"text": "rag", "written_by": "rules"}],
+            [_run("arxiv"), _run("openalex"), _run("semantic_scholar")],
+            2,
+            kept,
+            0,
+            today=self.TODAY,
+        )
+        assert describe_scope(report) == (
+            "arXiv, OpenAlex and Semantic Scholar (1 query, 2026-10-22); kept 2 abstract(s): "
+            "1 from arXiv, 1 from OpenAlex, 1 from Semantic Scholar (some found by more than one)"
+        )
+
+    def test_a_search_that_kept_nothing_says_so(self):
+        report = build_coverage(
+            [{"text": "rag", "written_by": "rules"}], [_run("openalex", n=0)], 0, [], 0,
+            today=self.TODAY,
+        )
+        assert describe_scope(report) == "OpenAlex (1 query, 2026-10-22); no paper was found"
+
 
 # ---------------------------------------------------------------------------
 # The agent, end to end over recorded responses

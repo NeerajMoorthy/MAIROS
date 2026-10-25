@@ -481,6 +481,7 @@ class TestProjectAnswerWithoutNovelty:
                 "sources": [{"name": "arXiv", "status": "ok"}],
                 "queries": [{"text": "railway crack detection"}],
                 "papers_kept": 3,
+                "papers_by_source": {"arXiv": 3},
                 "searched_on": "2026-10-25",
                 "warnings": [],
             },
@@ -490,7 +491,7 @@ class TestProjectAnswerWithoutNovelty:
 
         answer = ctx.intermediate_results["final_answer"]
         assert answer.startswith("**Your project, as MAIROS read it**")
-        assert "**Searched:** 3 abstract(s) from arXiv" in answer
+        assert "**Searched:** arXiv (1 query, 2026-10-25); kept 3 abstract(s), all from arXiv." in answer
         assert asked == ["railway crack detection robot"]
 
 

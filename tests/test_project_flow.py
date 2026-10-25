@@ -228,7 +228,11 @@ class TestProjectFlowEndToEnd:
 
         answer = result["answer"]
         assert answer.startswith("**Your project, as MAIROS read it**")
-        assert "**Searched:** 4 abstract(s) from arXiv, OpenAlex, Semantic Scholar" in answer
+        assert "**Searched:** arXiv, OpenAlex and Semantic Scholar (4 queries, " in answer
+        assert (
+            "; kept 4 abstract(s): 2 from arXiv, 2 from OpenAlex, 3 from Semantic Scholar "
+            "(some found by more than one)." in answer
+        )
         for overclaim in ("is novel", "is new in the field", "no prior work exists"):
             assert overclaim not in answer.lower()
 

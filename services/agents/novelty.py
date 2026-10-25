@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from services.common.json_utils import extract_json
 from services.generation.provider import TASK_NOVELTY
+from services.literature.coverage import join_names
 from services.literature.papers import (
     FETCHED_PREFIXES,
     SOURCE_NAMES,
@@ -89,9 +90,7 @@ def _ordered(names: set[str]) -> list[str]:
 
 
 def _join(names: list[str]) -> str:
-    if len(names) <= 1:
-        return names[0] if names else "the literature search"
-    return ", ".join(names[:-1]) + " and " + names[-1]
+    return join_names(names) or "the literature search"
 
 NOVELTY_PROMPT = (
     TASK_NOVELTY + "\n"

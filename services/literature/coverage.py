@@ -109,8 +109,21 @@ def build_coverage(
     }
 
 
+def join_names(names: list[str]) -> str:
+    """Join names as `A`, `A and B` or `A, B and C`; empty for none."""
+    if len(names) <= 1:
+        return names[0] if names else ""
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
 def describe_scope(coverage: dict | None) -> str:
-    """One line naming what was searched, for agents that quote their scope."""
+    """One line saying which sources were searched and where the kept papers came from.
+
+    These are two different facts and used to be one: a live run printed
+    "8 abstract(s) from arXiv, OpenAlex" when arXiv had answered but every one
+    of the 8 kept papers came from OpenAlex. A source that did not answer is
+    not listed here; the coverage warnings name it.
+    """
     if not coverage:
         return ""
     if not coverage.get("sources"):
@@ -118,11 +131,34 @@ def describe_scope(coverage: dict | None) -> str:
     answered = [s["name"] for s in coverage.get("sources", []) if s.get("status") == "ok"]
     if not answered:
         return "no literature source (none could be reached)"
+
     queries = len(coverage.get("queries", []))
-    return (
-        f"{coverage.get('papers_kept', 0)} abstract(s) from {', '.join(answered)} "
-        f"({queries} quer{'y' if queries == 1 else 'ies'}, searched {coverage.get('searched_on')})"
+    searched = (
+        f"{join_names(answered)} ({queries} quer{'y' if queries == 1 else 'ies'}, "
+        f"{coverage.get('searched_on')})"
     )
+    kept = coverage.get("papers_kept", 0)
+    if not kept:
+        return f"{searched}; no paper was found"
+
+    counts = {name: n for name, n in (coverage.get("papers_by_source") or {}).items() if n}
+    origins = [name for name in SOURCE_NAMES.values() if name in counts]
+    origins += sorted(name for name in counts if name not in origins)
+    if len(origins) == 1:
+        return f"{searched}; kept {kept} abstract(s), all from {origins[0]}"
+    if origins:
+        breakdown = ", ".join(f"{counts[name]} from {name}" for name in origins)
+        if sum(counts.values()) > kept:
+            breakdown += " (some found by more than one)"
+        return f"{searched}; kept {kept} abstract(s): {breakdown}"
+    return f"{searched}; kept {kept} abstract(s)"
 
 
-__all__ = ["SCOPE_NOTE", "SMALL_CORPUS", "build_coverage", "describe_scope", "SOURCE_NAMES"]
+__all__ = [
+    "SCOPE_NOTE",
+    "SMALL_CORPUS",
+    "SOURCE_NAMES",
+    "build_coverage",
+    "describe_scope",
+    "join_names",
+]

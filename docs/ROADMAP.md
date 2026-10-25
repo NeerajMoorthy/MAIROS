@@ -1,6 +1,6 @@
 # Roadmap to completion
 
-Current state: **≈ 95%** of the full project scope. 652 backend and 144
+Current state: **≈ 95%** of the full project scope. 655 backend and 144
 frontend tests pass offline (plus 9 Postgres contract tests that pass against
 a real PostgreSQL 16 server), TypeScript is clean under `strict`, and both the
 production Next.js build and the Cloudflare Worker bundle build.
