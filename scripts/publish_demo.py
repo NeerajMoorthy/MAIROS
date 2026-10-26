@@ -2,24 +2,31 @@
 """Publish the MAIROS demo: the API on this PC, behind the Vercel website.
 
     .venv\\Scripts\\python scripts\\publish_demo.py                 # start what is not running
+    .venv\\Scripts\\python scripts\\publish_demo.py --ngrok-domain x.ngrok-free.app   # once: use ngrok
     .venv\\Scripts\\python scripts\\publish_demo.py --restart-api   # load code changes into the API
     .venv\\Scripts\\python scripts\\publish_demo.py --stop          # stop what this script started
 
 The website (https://mairos.vercel.app) forwards every /api request to
 MAIROS_API_URL, which Next.js reads at build time. For this demo that address
-is a Cloudflare quick tunnel to an API server on this machine. A quick tunnel
-needs no Cloudflare account, but it gets a new random address every time it
-starts — so whenever this script opens a new tunnel it stores the address on
-the Vercel project and redeploys the site (a minute or two). A tunnel it
-started earlier that still answers is reused, and nothing is redeployed.
+is a tunnel to an API server on this machine, one of:
+
+- an **ngrok** fixed domain (free account; `--ngrok-domain`, remembered after
+  the first run). The address never changes, and ngrok runs over ordinary
+  HTTPS, so it also works on networks that block Cloudflare's tunnel ports;
+- a **Cloudflare quick tunnel** (no account). It gets a new random address
+  every time it starts.
+
+The script redeploys the site only when the address it forwards to has
+changed (a minute or two): with ngrok, only the first time. A tunnel it started
+earlier that still answers is reused.
 
 The API and the tunnel run in the background and keep running after this
 script ends. Their logs and process ids live in the demo's data folder, which
 is separate from apps/api/data, so local projects are never published.
 
-Needs: the backend's virtual environment (.venv), cloudflared, and Node.js
-with the Vercel CLI logged in to the account that owns the project
-(`npx vercel login`, once).
+Needs: the backend's virtual environment (.venv), ngrok with your authtoken
+added (`ngrok config add-authtoken ...`) or cloudflared, and Node.js with the
+Vercel CLI logged in to the account that owns the project (`npx vercel login`).
 """
 
 from __future__ import annotations
@@ -50,7 +57,8 @@ TUNNEL_ADDRESS = re.compile(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com")
 def healthy(base_url: str) -> bool:
     """Whether the MAIROS API answers its health check at ``base_url``."""
     request = urllib.request.Request(
-        f"{base_url}/api/health", headers={"User-Agent": "mairos-publish-demo"}
+        f"{base_url}/api/health",
+        headers={"User-Agent": "mairos-publish-demo", "ngrok-skip-browser-warning": "1"},
     )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
@@ -134,6 +142,21 @@ def find_cloudflared(given: Path | None) -> Path:
     )
 
 
+def find_ngrok(given: Path | None) -> Path:
+    """The ngrok binary: --ngrok, PATH, or where winget installs it."""
+    if given:
+        if not given.is_file():
+            raise SystemExit(f"--ngrok: no file at {given}")
+        return given
+    on_path = shutil.which("ngrok")
+    if on_path:
+        return Path(on_path)
+    winget = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
+    for candidate in sorted(winget.glob("Ngrok.Ngrok*/ngrok.exe")):
+        return candidate
+    raise SystemExit("ngrok not found. Install it (winget install Ngrok.Ngrok) or pass --ngrok <path>.")
+
+
 def tunnel_address(log: Path) -> str:
     match = TUNNEL_ADDRESS.search(log.read_text(encoding="utf-8", errors="replace"))
     return match.group(0) if match else ""
@@ -172,6 +195,12 @@ def main() -> None:
         "--data-dir", type=Path, default=WORKSPACE / "mairos-deploy-data",
         help="data folder of the public API (default: mairos-deploy-data beside the repository)",
     )
+    parser.add_argument(
+        "--ngrok-domain",
+        help="your ngrok domain, e.g. name.ngrok-free.app; remembered, so give it once",
+    )
+    parser.add_argument("--cloudflare", action="store_true", help="go back to a Cloudflare quick tunnel")
+    parser.add_argument("--ngrok", type=Path, help="path to ngrok")
     parser.add_argument("--cloudflared", type=Path, help="path to cloudflared")
     args = parser.parse_args()
 
@@ -189,9 +218,18 @@ def main() -> None:
                 print(f"Stopped the {name} (process {state[name]['pid']}).")
         if "api" not in state and healthy(api_url):
             print(f"The API on {api_url} was not started by this script; stop it where it runs.")
-        state_file.unlink(missing_ok=True)
+        # The processes are gone; the ngrok domain and the deployed address are kept.
+        state.pop("api", None)
+        state.pop("tunnel", None)
+        save(state_file, state)
         print(f"{SITE_URL} stays up but shows the backend as offline until this script runs again.")
         return
+
+    if args.cloudflare:
+        state.pop("ngrok_domain", None)
+    elif args.ngrok_domain:
+        state["ngrok_domain"] = args.ngrok_domain.removeprefix("https://").strip("/")
+    ngrok_domain = state.get("ngrok_domain")
 
     # 1. The API, with the demo's own data folder.
     if args.restart_api:
@@ -216,35 +254,45 @@ def main() -> None:
         wait_for(lambda: healthy(api_url), 180, "the API to start", process, f"See {log}.")
         print(f"API      up, data in {data_dir}")
 
-    # 2. The tunnel: reused while it answers, otherwise replaced.
+    # 2. The tunnel: reused while it answers and is the kind asked for,
+    # otherwise replaced.
     tunnel = state.get("tunnel")
-    if running(tunnel) and healthy(tunnel["url"]):
+    wanted = f"https://{ngrok_domain}" if ngrok_domain else None
+    kind_asked_for = tunnel and (
+        tunnel["url"] == wanted if wanted else "trycloudflare.com" in tunnel["url"]
+    )
+    if running(tunnel) and kind_asked_for and healthy(tunnel["url"]):
         print(f"Tunnel   still up at {tunnel['url']}")
-        new_address = False
     else:
         if running(tunnel):
-            stop(tunnel)  # alive but no longer answering
-        cloudflared = find_cloudflared(args.cloudflared)
+            stop(tunnel)  # not answering, or not the tunnel asked for
         log = logs / "tunnel.log"
-        process = start_background(
-            [str(cloudflared), "tunnel", "--url", api_url, "--no-autoupdate"], log
-        )
-        tunnel = {"pid": process.pid, "image": cloudflared.name, "url": ""}
+        if ngrok_domain:
+            ngrok = find_ngrok(args.ngrok)
+            process = start_background(
+                [str(ngrok), "http", str(args.port), f"--url={wanted}", "--log=stdout"], log
+            )
+            tunnel = {"pid": process.pid, "image": ngrok.name, "url": wanted}
+            print(f"Tunnel   opening ngrok on {wanted} ...")
+        else:
+            cloudflared = find_cloudflared(args.cloudflared)
+            process = start_background(
+                [str(cloudflared), "tunnel", "--url", api_url, "--no-autoupdate"], log
+            )
+            tunnel = {"pid": process.pid, "image": cloudflared.name, "url": ""}
+            print("Tunnel   opening a Cloudflare quick tunnel ...")
+            wait_for(lambda: bool(tunnel_address(log)), 60, "the tunnel's address", process, f"See {log}.")
+            tunnel["url"] = tunnel_address(log)
         state["tunnel"] = tunnel
-        save(state_file, state)
-        print("Tunnel   opening a quick tunnel ...")
-        wait_for(lambda: bool(tunnel_address(log)), 60, "the tunnel's address", process, f"See {log}.")
-        tunnel["url"] = tunnel_address(log)
         save(state_file, state)
         wait_for(
             lambda: healthy(tunnel["url"]), 90, "the API to answer through the tunnel",
             process, f"See {log}.",
         )
         print(f"Tunnel   up at {tunnel['url']}")
-        new_address = True
 
     # 3. The website, rebuilt only when the address it forwards to changed.
-    if new_address or args.redeploy:
+    if tunnel["url"] != state.get("deployed_url") or args.redeploy:
         print("Vercel   storing the address and redeploying the site (1-2 minutes) ...")
         vercel(
             "env", "add", "MAIROS_API_URL", "--environment", "production",
@@ -252,6 +300,8 @@ def main() -> None:
             "--no-sensitive", "--force", "--yes",
         )
         vercel("deploy", "--prod", "--yes")
+        state["deployed_url"] = tunnel["url"]
+        save(state_file, state)
     else:
         print("Vercel   no redeploy needed")
 

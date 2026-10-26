@@ -17,7 +17,20 @@ import { NextResponse, type NextRequest } from "next/server";
 // Better Auth prefixes the cookie with `__Secure-` when served over HTTPS.
 const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.session_token"];
 
+/**
+ * /api/* is proxied to the backend with the visitor's own headers. When the
+ * backend sits behind a free ngrok domain, a browser User-Agent gets ngrok's
+ * warning page instead of JSON unless this header is present. Any other
+ * backend ignores it.
+ */
+function forwardToBackend(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.set("ngrok-skip-browser-warning", "1");
+  return NextResponse.next({ request: { headers } });
+}
+
 export function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/")) return forwardToBackend(request);
   if (process.env.NEXT_PUBLIC_AUTH_ENABLED !== "true") return NextResponse.next();
 
   if (!SESSION_COOKIES.some((name) => request.cookies.get(name)?.value)) {
@@ -30,7 +43,10 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Pages only: not the API (the backend answers 401 itself), not the sign-in
-  // page, and not static assets.
-  matcher: ["/((?!api|sign-in|_next/static|_next/image|favicon.ico|icon.svg|robots.txt).*)"],
+  // Pages (for the sign-in redirect), and /api/* only to add the header above:
+  // the backend answers 401 itself. Not the sign-in page or static assets.
+  matcher: [
+    "/api/:path*",
+    "/((?!api|sign-in|_next/static|_next/image|favicon.ico|icon.svg|robots.txt).*)",
+  ],
 };

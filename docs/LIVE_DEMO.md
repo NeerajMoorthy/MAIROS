@@ -2,7 +2,16 @@
 
 MAIROS is on the internet at **https://mairos.vercel.app**. The website runs
 on Vercel; the API runs on the project owner's PC and is reached through a free
-Cloudflare quick tunnel. It is up only while that PC is on and running it.
+**ngrok** domain, `https://maximize-aground-booted.ngrok-free.dev` (since
+26 October 2026; before that, a Cloudflare quick tunnel). It is up only while
+that PC is on, awake, online and running it.
+
+Why ngrok: its address never changes, so a restart needs no redeploy, and it
+runs over ordinary HTTPS. On 26 October the network this PC was on blocked the
+ports Cloudflare's tunnel needs (outbound UDP and TCP 7844), and ngrok worked
+there. ngrok's free plan shows a warning page to browsers; the website's
+middleware adds the `ngrok-skip-browser-warning` header to every `/api` call
+it forwards, so visitors never see it.
 
 This is the single-user demo. The multi-user deployment (Cloudflare, Fly.io,
 Supabase, Better Auth, Google Analytics) is described in
@@ -10,9 +19,10 @@ Supabase, Better Auth, Google Analytics) is described in
 
 ```
  browser ──► Vercel: Next.js site (mairos.vercel.app)
-               │  /api/*  proxied to MAIROS_API_URL (next.config.js, fallback rewrite)
+               │  /api/*  proxied to MAIROS_API_URL (next.config.js, fallback rewrite),
+               │          with ngrok's skip-warning header (src/middleware.ts)
                ▼
-             Cloudflare quick tunnel  https://<random words>.trycloudflare.com
+             ngrok  https://maximize-aground-booted.ngrok-free.dev
                ▼
              this PC: uvicorn on 127.0.0.1:8010
                │  DATA_DIR = ..\mairos-deploy-data  (never apps/api/data)
@@ -31,10 +41,11 @@ The script starts what is not already running:
 
 1. **The API** on port 8010, with its own data folder, so projects on the
    local app (`apps/api/data`) are never published.
-2. **A quick tunnel** to it. A quick tunnel gets a new address every time it
-   starts, and the site reads that address when it is built — so when the
-   script opens a new tunnel it stores the address on the Vercel project
-   (`MAIROS_API_URL`) and redeploys the site, which takes a minute or two.
+2. **The tunnel** to it: ngrok on the saved domain (set once with
+   `--ngrok-domain`, after `ngrok config add-authtoken …`). The site reads the
+   backend address when it is built, so the script redeploys it only when that
+   address changes — with ngrok, only the first time. `--cloudflare` switches
+   back to a Cloudflare quick tunnel, whose address changes on every start.
 
 Both keep running in the background after the script ends, even if the
 terminal is closed. Run the script after a reboot, or whenever the site's
@@ -59,11 +70,12 @@ project. If it reports a failed `vercel` command, run `npx vercel login` in
   question they ask spends your Groq quota. Share the link only with people you
   trust, and keep private documents out of the demo. Turning on Better Auth
   ([DEPLOYMENT.md](DEPLOYMENT.md)) is what gives each user their own projects.
-- **It is up only while this PC is.** Shutting down or rebooting takes the API
-  offline until the script is run again.
-- **Quick tunnels come with no uptime guarantee** from Cloudflare. For an
-  address that does not change, use a named tunnel on a free Cloudflare
-  account, or move the API to Fly.io as in [DEPLOYMENT.md](DEPLOYMENT.md).
+- **It is up only while this PC is.** Shutting down, sleeping or rebooting
+  takes the API offline until the script is run again. To keep it up without
+  the PC, see the deferred plan in [MIGRATION_WORKERS.md](MIGRATION_WORKERS.md)
+  or the Fly.io route in [DEPLOYMENT.md](DEPLOYMENT.md).
+- **ngrok's free plan has usage limits** (bandwidth and requests per month).
+  A small demo stays well inside them; heavy use could reach them.
 - **Visitors share rate limits.** Without sign-in the API counts requests per
   caller address, and behind Vercel that address is one of Vercel's servers,
   not the visitor's. The budget per address is 240 reads and 20 writes a

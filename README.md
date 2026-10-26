@@ -11,7 +11,7 @@ it can quote, plus an evaluation dashboard that measures retrieval quality with
 real IR metrics.
 
 **Everything below runs end to end today**, offline if necessary: 683 backend
-tests and 145 frontend tests pass with no API key, no model download, and no
+tests and 147 frontend tests pass with no API key, no model download, and no
 network (plus 9 Postgres contract tests that run when a test database is
 configured — they pass against PostgreSQL 16).
 
@@ -887,7 +887,7 @@ python -m pytest tests/test_agents.py -v
 # Run the store contract against a real Postgres too:
 MAIROS_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_database_contract.py
 
-cd apps/web && npm test        # 145 frontend tests (Vitest + Testing Library)
+cd apps/web && npm test        # 147 frontend tests (Vitest + Testing Library)
 npx tsc --noEmit && npm run build
 ```
 

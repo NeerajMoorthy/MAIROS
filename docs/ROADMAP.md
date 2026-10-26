@@ -1,6 +1,6 @@
 # Roadmap to completion
 
-Current state: **93.75%** — 30 of the 32 required items. 683 backend and 145
+Current state: **93.75%** — 30 of the 32 required items. 683 backend and 147
 frontend tests pass offline (plus 9 Postgres contract tests that pass against
 a real PostgreSQL 16 server), TypeScript is clean under `strict`, and both the
 production Next.js build and the Cloudflare Worker bundle build.
@@ -22,7 +22,7 @@ that ceiling.)
 
 | # | Work item | Status | Evidence |
 |---|---|---|---|
-| 1 | Frontend test suite + CI | ✅ Complete | 145 Vitest tests incl. axe-core WCAG 2.1 AA; `.github/workflows/ci.yml` runs pytest, `npm test`, `tsc` and the build |
+| 1 | Frontend test suite + CI | ✅ Complete | 147 Vitest tests incl. axe-core WCAG 2.1 AA; `.github/workflows/ci.yml` runs pytest, `npm test`, `tsc` and the build |
 | 2 | Live-model validation, recorded | ⚠️ **Harness complete, numbers pending** | `scripts/live_validation.py` + 10 tests. See below. |
 | 3 | RAGAS wired | ✅ Complete (no live run yet) | `services/evaluation/ragas_runner.py`, labelled model-judged |
 | 4 | SQLite persistence | ✅ Complete | `app/db.py`, `app/store.py` |

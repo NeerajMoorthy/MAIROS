@@ -3,7 +3,7 @@
 This document separates two things that are easy to conflate: what MAIROS has
 **proven**, and what it has only **demonstrated**.
 
-- **Proven** — 828 automated tests (683 backend, 145 frontend) that run with
+- **Proven** — 830 automated tests (683 backend, 147 frontend) that run with
   no API key, no network and no model download, plus 9 Postgres contract tests
   run against a real PostgreSQL 16 server. They assert the system's own
   guarantees: routing decisions, retrieval ranking, evidence linking, the
@@ -55,7 +55,7 @@ evaluation on your own corpus to get figures for it.
 | — of which `test_persistence.py` | 20 | Restart durability, `state.json` migration, concurrency |
 | — of which `test_security.py` | 57 | Body caps, rate limits, CORS, request logging, outage handling |
 | — of which `test_theme_contrast.py` | 52 | WCAG AA contrast of every theme token, computed from the stylesheet |
-| Frontend (`vitest`) | 145 | Every panel's states; the Patents page in every state; axe-core WCAG 2.1 AA; the legal-wording audit over rendered patent output |
+| Frontend (`vitest`) | 147 | Every panel's states; the Patents page in every state; axe-core WCAG 2.1 AA; the legal-wording audit over rendered patent output |
 
 `.github/workflows/ci.yml` is set up to run both suites, the type check and the
 production build on every push and pull request — but only once the repository
