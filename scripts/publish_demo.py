@@ -3,6 +3,7 @@
 
     .venv\\Scripts\\python scripts\\publish_demo.py                 # start what is not running
     .venv\\Scripts\\python scripts\\publish_demo.py --ngrok-domain x.ngrok-free.app   # once: use ngrok
+    .venv\\Scripts\\python scripts\\publish_demo.py --localhost-run   # once: use localhost.run
     .venv\\Scripts\\python scripts\\publish_demo.py --restart-api   # load code changes into the API
     .venv\\Scripts\\python scripts\\publish_demo.py --stop          # stop what this script started
 
@@ -14,7 +15,12 @@ is a tunnel to an API server on this machine, one of:
   the first run). The address never changes, and ngrok runs over ordinary
   HTTPS, so it also works on networks that block Cloudflare's tunnel ports;
 - a **Cloudflare quick tunnel** (no account). It gets a new random address
-  every time it starts.
+  every time it starts;
+- a **localhost.run** tunnel (no account, no install: the SSH client Windows
+  ships with, over port 22). For networks that block both ngrok's binary and
+  Cloudflare's tunnel ports. Like Cloudflare, the address changes each time it
+  starts, and the free service may also move it while running; the script
+  notices that the old address stopped answering and redeploys.
 
 The script redeploys the site only when the address it forwards to has
 changed (a minute or two): with ngrok, only the first time. A tunnel it started
@@ -25,7 +31,8 @@ script ends. Their logs and process ids live in the demo's data folder, which
 is separate from apps/api/data, so local projects are never published.
 
 Needs: the backend's virtual environment (.venv), ngrok with your authtoken
-added (`ngrok config add-authtoken ...`) or cloudflared, and Node.js with the
+added (`ngrok config add-authtoken ...`), cloudflared, or an SSH client for
+localhost.run, and Node.js with the
 Vercel CLI logged in to the account that owns the project (`npx vercel login`).
 """
 
@@ -52,6 +59,9 @@ WINDOWS = os.name == "nt"
 # cloudflared prints the tunnel's address once it has one. api.trycloudflare.com
 # is the service it asks for that address, not the address itself.
 TUNNEL_ADDRESS = re.compile(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com")
+# localhost.run prints its address as https://<id>.lhr.life. Its banner also
+# links to admin.localhost.run and localhost.run/docs, which are not tunnels.
+LHR_ADDRESS = re.compile(r"https://[a-z0-9-]+\.lhr\.life")
 
 
 def healthy(base_url: str) -> bool:
@@ -157,9 +167,27 @@ def find_ngrok(given: Path | None) -> Path:
     raise SystemExit("ngrok not found. Install it (winget install Ngrok.Ngrok) or pass --ngrok <path>.")
 
 
-def tunnel_address(log: Path) -> str:
-    match = TUNNEL_ADDRESS.search(log.read_text(encoding="utf-8", errors="replace"))
-    return match.group(0) if match else ""
+def find_ssh(given: Path | None) -> Path:
+    """The SSH client for localhost.run: --ssh, PATH, or Windows' built-in copy."""
+    if given:
+        if not given.is_file():
+            raise SystemExit(f"--ssh: no file at {given}")
+        return given
+    on_path = shutil.which("ssh")
+    if on_path:
+        return Path(on_path)
+    builtin = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "OpenSSH" / "ssh.exe"
+    if builtin.is_file():
+        return builtin
+    raise SystemExit(
+        "ssh not found. On Windows, add the optional feature 'OpenSSH Client', or pass --ssh <path>."
+    )
+
+
+def tunnel_address(log: Path, pattern: re.Pattern = TUNNEL_ADDRESS) -> str:
+    """The latest tunnel address in ``log``; localhost.run may print a new one later."""
+    matches = pattern.findall(log.read_text(encoding="utf-8", errors="replace"))
+    return matches[-1] if matches else ""
 
 
 def vercel(*args: str) -> None:
@@ -200,8 +228,13 @@ def main() -> None:
         help="your ngrok domain, e.g. name.ngrok-free.app; remembered, so give it once",
     )
     parser.add_argument("--cloudflare", action="store_true", help="go back to a Cloudflare quick tunnel")
+    parser.add_argument(
+        "--localhost-run", action="store_true",
+        help="use a localhost.run tunnel over SSH (port 22); remembered, so give it once",
+    )
     parser.add_argument("--ngrok", type=Path, help="path to ngrok")
     parser.add_argument("--cloudflared", type=Path, help="path to cloudflared")
+    parser.add_argument("--ssh", type=Path, help="path to the ssh client (for --localhost-run)")
     args = parser.parse_args()
 
     data_dir = args.data_dir.resolve()
@@ -227,9 +260,15 @@ def main() -> None:
 
     if args.cloudflare:
         state.pop("ngrok_domain", None)
+        state.pop("localhost_run", None)
     elif args.ngrok_domain:
         state["ngrok_domain"] = args.ngrok_domain.removeprefix("https://").strip("/")
+        state.pop("localhost_run", None)
+    elif args.localhost_run:
+        state.pop("ngrok_domain", None)
+        state["localhost_run"] = True
     ngrok_domain = state.get("ngrok_domain")
+    localhost_run = bool(state.get("localhost_run"))
 
     # 1. The API, with the demo's own data folder.
     if args.restart_api:
@@ -258,9 +297,12 @@ def main() -> None:
     # otherwise replaced.
     tunnel = state.get("tunnel")
     wanted = f"https://{ngrok_domain}" if ngrok_domain else None
-    kind_asked_for = tunnel and (
-        tunnel["url"] == wanted if wanted else "trycloudflare.com" in tunnel["url"]
-    )
+    if wanted:
+        kind_asked_for = tunnel and tunnel["url"] == wanted
+    elif localhost_run:
+        kind_asked_for = tunnel and tunnel["url"].endswith(".lhr.life")
+    else:
+        kind_asked_for = tunnel and "trycloudflare.com" in tunnel["url"]
     if running(tunnel) and kind_asked_for and healthy(tunnel["url"]):
         print(f"Tunnel   still up at {tunnel['url']}")
     else:
@@ -274,6 +316,21 @@ def main() -> None:
             )
             tunnel = {"pid": process.pid, "image": ngrok.name, "url": wanted}
             print(f"Tunnel   opening ngrok on {wanted} ...")
+        elif localhost_run:
+            ssh = find_ssh(args.ssh)
+            process = start_background(
+                [str(ssh), "-T", "-R", f"80:127.0.0.1:{args.port}",
+                 "-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=30",
+                 "-o", "ExitOnForwardFailure=yes", "nokey@localhost.run"],
+                log,
+            )
+            tunnel = {"pid": process.pid, "image": ssh.name, "url": ""}
+            print("Tunnel   opening a localhost.run tunnel over SSH ...")
+            wait_for(
+                lambda: bool(tunnel_address(log, LHR_ADDRESS)), 60, "the tunnel's address",
+                process, f"See {log}.",
+            )
+            tunnel["url"] = tunnel_address(log, LHR_ADDRESS)
         else:
             cloudflared = find_cloudflared(args.cloudflared)
             process = start_background(
