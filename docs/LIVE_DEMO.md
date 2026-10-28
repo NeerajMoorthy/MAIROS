@@ -1,5 +1,10 @@
 # The live demo: Vercel and this PC
 
+> **Moving off the PC (28 October 2026):** the owner chose to run the API on a
+> free Oracle Cloud VM so the site stays up without this PC. Once that is set up
+> (`docs/ORACLE_VM.md`), this page describes the old setup; do not run
+> `publish_demo.py` or Start MAIROS after the switch.
+
 MAIROS is on the internet at **https://mairos.vercel.app**. The website runs
 on Vercel; the API runs on the project owner's PC and is reached through a free
 **ngrok** domain, `https://maximize-aground-booted.ngrok-free.dev` (since
