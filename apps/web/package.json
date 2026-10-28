@@ -22,6 +22,7 @@
     "@radix-ui/react-slot": "^1.3.3",
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-tooltip": "^1.2.16",
+    "@react-three/fiber": "^8.18.0",
     "better-auth": "^1.7.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -32,7 +33,8 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-force-graph-2d": "^1.29.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "~1.15.1",
@@ -44,6 +46,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^6.1.1",
     "axe-core": "^4.13.0",
     "eslint": "^8",

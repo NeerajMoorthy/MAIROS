@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TiltCard } from "@/components/ui/tilt-card";
+import { Hero3D } from "@/components/three/Hero3D";
 import { forgetActiveProjectId, setActiveProjectId } from "@/lib/activeProject";
 import { api, type Project } from "@/lib/api";
 import { describeError } from "@/lib/errorMessage";
@@ -110,26 +112,34 @@ export default function ProjectsPage() {
 
   return (
     <div className="relative mx-auto w-full max-w-6xl p-6 md:p-10">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Research Projects
-            </h1>
-            <span className="flex items-center gap-1 rounded-full border border-frozen/30 bg-frozen/10 px-2.5 py-0.5 text-xs font-medium text-frozen">
-              <Sparkles className="h-3 w-3" /> MAIROS Core
-            </span>
-          </div>
-          <p className="mt-1.5 text-sm text-frozen/80">
+      <header className="relative mb-10 grid items-center gap-6 overflow-hidden rounded-2xl border border-frozen/15 bg-black-iris/40 px-6 py-8 backdrop-blur-sm md:grid-cols-[1fr_minmax(260px,380px)] md:px-10">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_80%_50%,rgba(160,189,219,0.14),transparent_60%)]"
+        />
+        <motion.div
+          className="relative"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          <span className="inline-flex items-center gap-1 rounded-full border border-frozen/30 bg-frozen/10 px-2.5 py-0.5 text-xs font-medium text-frozen">
+            <Sparkles className="h-3 w-3" /> MAIROS Core
+          </span>
+          <h1 className="mt-3 bg-gradient-to-br from-white via-frozen to-frozen/60 bg-clip-text text-4xl font-semibold tracking-tight text-transparent md:text-5xl">
+            Research Projects
+          </h1>
+          <p className="mt-3 max-w-md text-sm text-frozen/80 md:text-base">
             Each project has its own document library, knowledge graph, and agent history.
           </p>
-        </div>
-        <Button
-          onClick={() => setDialogOpen(true)}
-          className="border border-frozen/40 bg-frozen text-black-iris font-semibold hover:bg-frozen/90 shadow-[0_0_20px_rgba(160,189,219,0.25)] transition-all"
-        >
-          <Plus /> New Project
-        </Button>
+          <Button
+            onClick={() => setDialogOpen(true)}
+            className="mt-6 border border-frozen/40 bg-frozen text-black-iris font-semibold hover:bg-frozen/90 shadow-[0_0_20px_rgba(160,189,219,0.25)] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(160,189,219,0.35)]"
+          >
+            <Plus /> New Project
+          </Button>
+        </motion.div>
+        <Hero3D className="relative -my-4 hidden h-[260px] md:block lg:h-[300px]" />
       </header>
 
       {error && (
@@ -172,53 +182,57 @@ export default function ProjectsPage() {
           {projects.map((project, idx) => (
             <motion.div
               key={project.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: Math.min(idx * 0.05, 0.3) }}
+              initial={{ opacity: 0, y: 24, rotateX: -12 }}
+              animate={{ opacity: 1, y: 0, rotateX: 0 }}
+              transition={{ duration: 0.45, delay: Math.min(idx * 0.06, 0.36), ease: "easeOut" }}
+              style={{ transformPerspective: 900 }}
+              className="min-w-0"
             >
-              <Card className="group flex h-full flex-col rounded-xl border border-frozen/20 bg-black-iris/70 backdrop-blur-md transition-all duration-300 hover:border-frozen/50 hover:shadow-[0_8px_30px_rgba(160,189,219,0.14)]">
-                <CardHeader className="pb-4">
-                  <CardTitle className="truncate text-lg text-foreground group-hover:text-frozen transition-colors">
-                    {project.name}
-                  </CardTitle>
-                  <CardDescription className="line-clamp-2 h-10 text-muted-foreground">
-                    {project.description || "No description provided."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2 pb-4">
-                  <Badge
-                    variant="secondary"
-                    className="border border-frozen/20 bg-frozen/10 text-frozen"
-                  >
-                    <FileText className="h-3 w-3 mr-1" /> {project.num_documents} docs
-                  </Badge>
-                  <Badge
-                    variant="secondary"
-                    className="border border-frozen/20 bg-frozen/10 text-frozen"
-                  >
-                    <Library className="h-3 w-3 mr-1" /> {project.num_papers} papers
-                  </Badge>
-                </CardContent>
-                <CardFooter className="mt-auto gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1 border-frozen/30 bg-transparent text-foreground hover:border-frozen hover:bg-frozen/15 hover:text-frozen transition-all"
-                    onClick={() => handleOpenWorkspace(project.id)}
-                  >
-                    Open workspace <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    aria-label={`Delete ${project.name}`}
-                    className="shrink-0 border-destructive/50 bg-transparent text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => setProjectToDelete(project)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </CardFooter>
-              </Card>
+              <TiltCard className="h-full">
+                <Card className="group flex h-full flex-col rounded-xl border border-frozen/20 bg-black-iris/70 backdrop-blur-md transition-all duration-300 hover:border-frozen/50 hover:shadow-[0_8px_30px_rgba(160,189,219,0.14)]">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="truncate text-lg text-foreground group-hover:text-frozen transition-colors">
+                      {project.name}
+                    </CardTitle>
+                    <CardDescription className="line-clamp-2 h-10 text-muted-foreground">
+                      {project.description || "No description provided."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-2 pb-4">
+                    <Badge
+                      variant="secondary"
+                      className="border border-frozen/20 bg-frozen/10 text-frozen"
+                    >
+                      <FileText className="h-3 w-3 mr-1" /> {project.num_documents} docs
+                    </Badge>
+                    <Badge
+                      variant="secondary"
+                      className="border border-frozen/20 bg-frozen/10 text-frozen"
+                    >
+                      <Library className="h-3 w-3 mr-1" /> {project.num_papers} papers
+                    </Badge>
+                  </CardContent>
+                  <CardFooter className="mt-auto gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-frozen/30 bg-transparent text-foreground hover:border-frozen hover:bg-frozen/15 hover:text-frozen transition-all"
+                      onClick={() => handleOpenWorkspace(project.id)}
+                    >
+                      Open workspace <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Delete ${project.name}`}
+                      className="shrink-0 border-destructive/50 bg-transparent text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      onClick={() => setProjectToDelete(project)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TiltCard>
             </motion.div>
           ))}
         </div>
