@@ -1,5 +1,10 @@
 # Running the API on an Oracle Cloud VM (always on)
 
+> **Not in use (28 October 2026):** the owner chose to keep the API on the PC
+> with a watchdog that brings it back after restarts
+> (`docs/LIVE_DEMO.md`, *Keep it up on its own*). This page is the route for
+> when the site must also work while the PC is off.
+
 Until 28 October 2026 the live site's API ran on the owner's PC behind a
 temporary tunnel (`docs/LIVE_DEMO.md`). The site went down whenever the PC
 slept, restarted or changed network, and the tunnel's address changed each
