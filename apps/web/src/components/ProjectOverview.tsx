@@ -41,6 +41,8 @@ export function ProjectOverview({ stats }: { stats: ProjectStats | null }) {
   }
 
   const counts = stats.task_counts;
+  // A run waiting for its turn is as much in progress as one under way.
+  const active = counts.running + counts.queued;
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -51,11 +53,12 @@ export function ProjectOverview({ stats }: { stats: ProjectStats | null }) {
       <Stat
         icon={Loader2}
         label="Tasks running"
-        value={counts.running}
+        value={active}
         sub={
-          counts.running > 0 ? (
+          active > 0 ? (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-frozen">
               <Loader2 className="h-2.5 w-2.5 animate-spin" /> in progress
+              {counts.queued > 0 && ` · ${counts.queued} waiting to start`}
             </span>
           ) : undefined
         }

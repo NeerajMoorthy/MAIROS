@@ -155,9 +155,29 @@ class MetadataStore:
                 self._papers = rebuild("papers", Paper)
                 self._patents = rebuild("patents", Patent)
                 self._tasks = rebuild("tasks", Task)
+                interrupted = self._fail_interrupted_tasks()
                 self._evaluations = rebuild("evaluations", EvaluationRecord)
+            for task in interrupted:
+                self._persist("tasks", task)
         except Exception as exc:
             print(f"[store] load failed, starting empty: {exc}")
+
+    def _fail_interrupted_tasks(self) -> list[Task]:
+        """Mark runs a previous process left unfinished as failed.
+
+        Runs live in the process that started them, so one still queued or
+        running at startup will never finish. Left alone it counted as running
+        forever.
+        """
+        interrupted = []
+        for task in self._tasks.values():
+            if task.status in (TaskStatus.QUEUED, TaskStatus.RUNNING):
+                task.status = TaskStatus.FAILED
+                task.current_stage = TaskStage.FAILED
+                task.error = "Stopped: the server restarted before this run finished."
+                task.updated_at = utcnow()
+                interrupted.append(task)
+        return interrupted
 
     def _import_legacy_snapshot(self) -> int:
         """One-time import of a pre-SQLite ``state.json``.
@@ -513,12 +533,13 @@ class MetadataStore:
         with self._lock:
             task.events.append(event)
             task.current_stage = event.stage
+            # An event only says the run is under way. A degraded step logs
+            # "failed" and the orchestrator logs "completed" before the result
+            # is saved, and either one used to end the task while its agents
+            # were still working, so a busy project showed no running tasks.
+            # Only update_task_result and update_task_error finish a task.
             if task.status not in (TaskStatus.COMPLETED, TaskStatus.FAILED):
-                task.status = (
-                    TaskStatus.RUNNING
-                    if event.status == TaskStatus.QUEUED
-                    else event.status
-                )
+                task.status = TaskStatus.RUNNING
             task.updated_at = utcnow()
         # Events are the live trace; persisting each one is what makes a run
         # survivable across a restart mid-pipeline.

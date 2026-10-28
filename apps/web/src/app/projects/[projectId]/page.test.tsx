@@ -58,3 +58,40 @@ describe("Project workspace route", () => {
     expect(await screen.findByRole("heading", { name: "Recovered project" })).toBeInTheDocument();
   });
 });
+
+describe("Workspace header counts", () => {
+  it("re-reads the task counts while the page is open", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocked.getProject.mockReset().mockResolvedValue({
+        id: "missing-project",
+        name: "Busy project",
+        description: "",
+        created_at: "2026-10-12T00:00:00Z",
+        document_ids: [],
+        paper_ids: [],
+        num_documents: 0,
+        num_papers: 0,
+        documents: [],
+      });
+      mocked.projectStats.mockReset().mockResolvedValue({
+        documents: 0,
+        papers: 0,
+        chunks: 0,
+        graph: { nodes: 0, edges: 0 },
+        tasks: 0,
+        task_counts: { queued: 0, running: 0, completed: 0, failed: 0 },
+      });
+
+      render(<ProjectWorkspace />);
+      expect(await screen.findByRole("heading", { name: "Busy project" })).toBeInTheDocument();
+      const loads = mocked.projectStats.mock.calls.length;
+
+      // Runs started elsewhere after the page opened must reach the header.
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(mocked.projectStats.mock.calls.length).toBeGreaterThan(loads);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -33,6 +33,8 @@ const TABS = [
 
 const VALID_TABS: string[] = TABS.map((t) => t.value);
 
+const STATS_POLL_MS = 4000;
+
 const TRIGGER_CLASS =
   "transition-all data-[state=active]:border-b-2 data-[state=active]:border-frozen data-[state=active]:bg-frozen/15 data-[state=active]:text-frozen data-[state=active]:shadow-[0_0_12px_rgba(160,189,219,0.15)]";
 
@@ -106,6 +108,26 @@ export default function ProjectWorkspace() {
     setStats(null);
     void refresh();
   }, [refresh]);
+
+  // Runs start from Workflows, Chat, the Tasks page or another device, and
+  // finish on their own, so the header counts are re-read while the page is
+  // open. Loading them once left "Tasks running" at 0 during busy runs.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      api.projectStats(projectId).then(
+        (next) => {
+          if (!cancelled) setStats(next);
+        },
+        () => {},
+      );
+    }, STATS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [projectId]);
 
   /**
    * Called when a panel starts a pipeline run. The panel follows the run
