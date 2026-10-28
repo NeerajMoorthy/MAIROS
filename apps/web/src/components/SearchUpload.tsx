@@ -80,6 +80,8 @@ export function SearchUpload({ projectId, documents, onTaskStarted, onChanged }:
           setLiveTask(task);
           if (task.status === "completed" || task.status === "failed") {
             if (pollTimer.current) clearInterval(pollTimer.current);
+            // New papers and graph nodes: refresh the workspace's counts.
+            onChanged();
           }
         })
         .catch(() => {
@@ -87,7 +89,7 @@ export function SearchUpload({ projectId, documents, onTaskStarted, onChanged }:
         });
     tick();
     pollTimer.current = setInterval(tick, 1500);
-  }, []);
+  }, [onChanged]);
 
   useEffect(() => () => { if (pollTimer.current) clearInterval(pollTimer.current); }, []);
 

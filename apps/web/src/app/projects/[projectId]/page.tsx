@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import {
-  Activity,
   Download,
   FlaskConical,
   MessagesSquare,
@@ -13,7 +12,6 @@ import {
   Search,
 } from "lucide-react";
 
-import { AgentActivity } from "@/components/AgentActivity";
 import { ChatPanel } from "@/components/ChatPanel";
 import { GraphViewer } from "@/components/GraphViewer";
 import { ProjectExportDialog } from "@/components/ProjectExportDialog";
@@ -30,7 +28,6 @@ const TABS = [
   { value: "search", label: "Search & Upload", icon: Search },
   { value: "chat", label: "Chat & Q&A", icon: MessagesSquare },
   { value: "workflows", label: "Workflows", icon: FlaskConical },
-  { value: "activity", label: "Agent Activity", icon: Activity },
   { value: "graph", label: "Knowledge Graph", icon: Network },
 ] as const;
 
@@ -60,7 +57,6 @@ export default function ProjectWorkspace() {
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [tab, setTab] = useState("search");
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const exportButton = useRef<HTMLButtonElement>(null);
   const refreshGeneration = useRef(0);
@@ -111,15 +107,13 @@ export default function ProjectWorkspace() {
     void refresh();
   }, [refresh]);
 
-  /** Called when a panel starts a pipeline run — jump to the activity log. */
-  const handleTaskStarted = useCallback(
-    (taskId: string) => {
-      setActiveTaskId(taskId);
-      handleTabChange("activity");
-      refresh();
-    },
-    [refresh, handleTabChange],
-  );
+  /**
+   * Called when a panel starts a pipeline run. The panel follows the run
+   * itself; every run, across projects, is on the Tasks page.
+   */
+  const handleTaskStarted = useCallback(() => {
+    refresh();
+  }, [refresh]);
 
   if (!project) {
     return (
@@ -225,17 +219,7 @@ export default function ProjectWorkspace() {
         </TabsContent>
 
         <TabsContent value="workflows" className="min-h-0 flex-1 overflow-auto px-4 pb-6 sm:px-6">
-          <WorkflowPanel projectId={projectId} onTaskStarted={setActiveTaskId} />
-        </TabsContent>
-
-        {/* Scrolls below `lg`, where the run list and detail stack. */}
-        <TabsContent value="activity" className="min-h-0 flex-1 overflow-auto px-4 pb-6 sm:px-6 lg:overflow-hidden">
-          <AgentActivity
-            projectId={projectId}
-            selectedTaskId={activeTaskId}
-            onSelect={setActiveTaskId}
-            onSettled={refresh}
-          />
+          <WorkflowPanel projectId={projectId} />
         </TabsContent>
 
         <TabsContent value="graph" className="mt-0 min-h-0 flex-1">
