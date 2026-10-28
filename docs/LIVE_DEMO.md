@@ -13,6 +13,15 @@ the demo runs on a Cloudflare quick tunnel again (`publish_demo.py
 --cloudflare`). Going back to ngrok is `publish_demo.py --ngrok-domain
 maximize-aground-booted.ngrok-free.dev`.
 
+**28 October 2026:** the PC's network still blocks Cloudflare's tunnel port
+(TCP 7844 to both regions), so the demo moves to a **localhost.run** tunnel:
+`publish_demo.py --localhost-run`, once; the choice is remembered, so Start
+MAIROS (`start_demo.bat`) keeps using it. localhost.run needs no account and no
+install (it uses the SSH client built into Windows, over port 22). Its address
+(`https://<id>.lhr.life`) changes on every start and the free service may move
+it while running; the script then sees the old address stop answering, opens a
+new tunnel and redeploys (1-2 minutes).
+
 Why ngrok: its address never changes, so a restart needs no redeploy, and it
 runs over ordinary HTTPS. On 26 October the network this PC was on blocked the
 ports Cloudflare's tunnel needs (outbound UDP and TCP 7844), and ngrok worked
@@ -52,7 +61,8 @@ The script starts what is not already running:
    `--ngrok-domain`, after `ngrok config add-authtoken …`). The site reads the
    backend address when it is built, so the script redeploys it only when that
    address changes — with ngrok, only the first time. `--cloudflare` switches
-   back to a Cloudflare quick tunnel, whose address changes on every start.
+   back to a Cloudflare quick tunnel, whose address changes on every start;
+   `--localhost-run` to a localhost.run tunnel over SSH, likewise.
 
 Both keep running in the background after the script ends, even if the
 terminal is closed. Run the script after a reboot, or whenever the site's
