@@ -14,6 +14,9 @@ from .base import AgentContext, BaseAgent
 MAX_SOURCE_CHUNKS = 10
 # Most concepts a paper node is linked to.
 MAX_PAPER_CONCEPTS = 6
+# An uploaded document's concepts were all extracted from it, so it links to
+# every one this run added, up to the extractor's own limit.
+MAX_DOCUMENT_CONCEPTS = 12
 
 
 def mentions(name: str, text: str) -> bool:
@@ -74,8 +77,10 @@ class KnowledgeGraphAgent(BaseAgent):
         # picks up unrelated older concepts once a project has history.
         added_concepts: list[str] = []
 
-        if text.strip() and self.llm is not None:
-            result = self.extractor.extract(text)
+        if text.strip():
+            # The passages themselves, should the model not answer: richer
+            # than a summary for picking out the concepts a paper repeats.
+            result = self.extractor.extract(text, fallback_text=ctx.context_text(limit=6000))
             if result.problem:
                 # Recorded as its own event so a run that adds less than it
                 # should to the graph says why, rather than only "+0 nodes".
@@ -122,6 +127,17 @@ class KnowledgeGraphAgent(BaseAgent):
             linked = [c for c in added_concepts if mentions(c, own_text)]
             for concept in linked[:MAX_PAPER_CONCEPTS]:
                 graph.add_relation(paper["title"], "PART_OF", concept, 0.6, save=False)
+
+        # 4. An uploaded document is a paper too. It used to add only its
+        #    concepts, so the graph could not say which paper a concept came
+        #    from, and a concept no other concept named floated unattached.
+        if ctx.document_id and ctx.retrieved_chunks and added_concepts:
+            first = ctx.retrieved_chunks[0]
+            title = first.get("title") or first.get("document_name") or ""
+            if title:
+                graph.add_entity(title, "Paper", first.get("document_name", ""), save=False)
+                for concept in added_concepts[:MAX_DOCUMENT_CONCEPTS]:
+                    graph.add_relation(title, "PART_OF", concept, 0.8, save=False)
 
         graph.save()
         after = graph.stats()

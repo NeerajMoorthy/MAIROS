@@ -8,6 +8,8 @@ from services.common.json_utils import as_text, extract_json
 from services.common.text import normalize_name
 from services.generation.provider import TASK_EXTRACTION
 
+from .concepts import co_occurring, concept_phrases
+
 ALLOWED_TYPES = {
     "Concept",
     "Method",
@@ -124,20 +126,32 @@ class EntityRelationExtractor:
             return as_text(response), metadata.get("finish_reason") == "length"
         return as_text(self.llm(prompt)), False
 
-    def extract(self, text: str, max_chars: int = 6000) -> ExtractionResult:
-        """Extract entities and relations from *text*."""
-        text = (text or "").strip()
-        if not text or self.llm is None:
-            return ExtractionResult()
+    def extract(self, text: str, max_chars: int = 6000, fallback_text: str = "") -> ExtractionResult:
+        """Extract entities and relations from *text*.
 
-        raw, truncated = self._invoke(EXTRACTION_PROMPT.format(text=text[:max_chars]))
+        When the model is missing, fails, or returns nothing usable, the
+        concepts *fallback_text* (or *text*) repeats are used instead — see
+        :mod:`services.knowledge_graph.concepts` — and ``problem`` says so.
+        """
+        text = (text or "").strip()
+        if not text:
+            return ExtractionResult()
+        if self.llm is None:
+            return self._from_key_concepts(fallback_text or text, "no model is configured")
+
+        try:
+            raw, truncated = self._invoke(EXTRACTION_PROMPT.format(text=text[:max_chars]))
+        except Exception as exc:  # e.g. a 429 from the provider's per-minute limit
+            return self._from_key_concepts(
+                fallback_text or text, f"the model call failed ({type(exc).__name__}: {str(exc)[:160]})"
+            )
         budget = (
             "the model reached its output token limit before finishing "
             "(LLM_EXTRACTION_MAX_TOKENS; a reasoning model spends part of it thinking)"
         )
         if not raw.strip():
-            return ExtractionResult(
-                problem=budget if truncated else "the model returned an empty response"
+            return self._from_key_concepts(
+                fallback_text or text, budget if truncated else "the model returned an empty response"
             )
 
         data = extract_json(raw, default=None)
@@ -145,8 +159,9 @@ class EntityRelationExtractor:
         if not isinstance(data, dict):
             data = _salvage_entities(raw)
             if data is None:
-                return ExtractionResult(
-                    problem=budget if truncated else "the model's response contained no parseable JSON object"
+                return self._from_key_concepts(
+                    fallback_text or text,
+                    budget if truncated else "the model's response contained no parseable JSON object",
                 )
             problem = (budget if truncated else "the response was cut off") + "; the complete entity list was kept and the relations were lost"
 
@@ -205,4 +220,26 @@ class EntityRelationExtractor:
                 )
             )
 
+        if not entities:
+            return self._from_key_concepts(fallback_text or text, "the model named no entities")
         return ExtractionResult(entities=entities, relations=relations, problem=problem)
+
+    @staticmethod
+    def _from_key_concepts(text: str, why: str) -> ExtractionResult:
+        """Concepts the text repeats, linked when they share a sentence.
+
+        Without this, a model failure — such as a rate limit during a run —
+        left the paper with no concepts in the graph, and patent awareness,
+        which matches patents against those concepts, with almost nothing.
+        """
+        names = concept_phrases(text)
+        if not names:
+            return ExtractionResult(problem=why)
+        return ExtractionResult(
+            entities=[ExtractedEntity(name=name, type="Concept") for name in names],
+            relations=[
+                ExtractedRelation(subject=a, relation="RELATED_TO", object=b, confidence=0.5)
+                for a, b in co_occurring(names, text)
+            ],
+            problem=f"{why}; key concepts were taken from the text instead",
+        )

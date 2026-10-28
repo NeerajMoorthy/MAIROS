@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 
-import { PipelineTrace } from "@/components/PipelineTrace";
+import { OrchestrationTree } from "@/components/OrchestrationTree";
 import { TaskAnswer, WorkflowSections } from "@/components/TaskResultView";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,18 +19,6 @@ interface Props {
 }
 
 const POLL_MS = 1500;
-
-const AGENT_COLOURS: Record<string, string> = {
-  orchestrator: "bg-primary",
-  literature: "bg-sky-500",
-  indexer: "bg-violet-500",
-  loader: "bg-violet-500",
-  retriever: "bg-cyan-500",
-  analysis: "bg-amber-500",
-  knowledge_graph: "bg-emerald-500",
-  citation: "bg-rose-500",
-  synthesis: "bg-indigo-500",
-};
 
 export function StatusBadge({ status }: { status: Task["status"] }) {
   switch (status) {
@@ -252,40 +240,12 @@ export function AgentActivity({ projectId, selectedTaskId, onSelect, onSettled }
 
                 <div>
                   <h4 className="mb-3 text-sm font-medium">
-                    Algorithm trace — Router → Retrieval/Analysis → Indexing → Knowledge Graph → Citation → Synthesis
+                    Orchestration tree — the Orchestrator assigns each step to an agent
                   </h4>
-                  <PipelineTrace task={selected} />
-                </div>
-
-                <div>
-                  <h4 className="mb-3 text-sm font-medium">Agent activity log</h4>
                   {selected.events.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No events yet.</p>
                   ) : (
-                    <ol className="relative space-y-4 border-l pl-6">
-                      {selected.events.map((event, index) => (
-                        <li key={`${event.timestamp}-${index}`} className="relative">
-                          <span
-                            aria-hidden="true"
-                            className={`absolute -left-[1.6rem] top-1 h-3 w-3 rounded-full ring-4 ring-background ${
-                              event.status === "failed"
-                                ? "bg-destructive"
-                                : (AGENT_COLOURS[event.agent_name] ?? "bg-muted-foreground")
-                            }`}
-                          />
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium">{humanise(event.agent_name)}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {humanise(event.stage)}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(event.timestamp).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          <p className="mt-1 break-words text-sm text-muted-foreground">{event.message}</p>
-                        </li>
-                      ))}
-                    </ol>
+                    <OrchestrationTree task={selected} />
                   )}
                 </div>
 

@@ -3,7 +3,7 @@
 This document separates two things that are easy to conflate: what MAIROS has
 **proven**, and what it has only **demonstrated**.
 
-- **Proven** — 830 automated tests (683 backend, 147 frontend) that run with
+- **Proven** — 846 automated tests (695 backend, 151 frontend) that run with
   no API key, no network and no model download, plus 9 Postgres contract tests
   run against a real PostgreSQL 16 server. They assert the system's own
   guarantees: routing decisions, retrieval ranking, evidence linking, the
@@ -41,7 +41,7 @@ evaluation on your own corpus to get figures for it.
 
 | Suite | Count | Scope |
 |---|---|---|
-| Backend (`pytest`) | 683 passed, 9 skipped | Agents, flows, retrieval, evaluation maths, API contracts, regressions |
+| Backend (`pytest`) | 695 passed, 9 skipped | Agents, flows, retrieval, evaluation maths, API contracts, regressions |
 | — of which `test_patents.py` | 62 | Segmentation, scoring, metadata, exports, disclaimer surface, legal-wording audit |
 | — of which `test_auth.py` | 15 | JWT verification and per-user isolation |
 | — of which `test_database_contract.py` | 13 (+9 Postgres) | One store contract for SQLite and Postgres; the 9 skipped run when `MAIROS_TEST_DATABASE_URL` is set and passed against PostgreSQL 16 |
@@ -55,7 +55,7 @@ evaluation on your own corpus to get figures for it.
 | — of which `test_persistence.py` | 20 | Restart durability, `state.json` migration, concurrency |
 | — of which `test_security.py` | 57 | Body caps, rate limits, CORS, request logging, outage handling |
 | — of which `test_theme_contrast.py` | 52 | WCAG AA contrast of every theme token, computed from the stylesheet |
-| Frontend (`vitest`) | 147 | Every panel's states; the Patents page in every state; axe-core WCAG 2.1 AA; the legal-wording audit over rendered patent output |
+| Frontend (`vitest`) | 151 | Every panel's states; the Patents page in every state; axe-core WCAG 2.1 AA; the legal-wording audit over rendered patent output |
 
 `.github/workflows/ci.yml` is set up to run both suites, the type check and the
 production build on every push and pull request — but only once the repository

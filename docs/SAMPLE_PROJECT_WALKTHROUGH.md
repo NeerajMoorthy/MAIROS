@@ -72,7 +72,7 @@ What the papers say, so you can check answers against them:
 | # | Do this | Expected |
 |---|---|---|
 | 1.1 | **Projects → New Project**. Name: `RailGuard Lite - Track Crack Detection`. Description: `Sample project for a manual test of MAIROS: railway crack detection, from upload to export.` Click **Create project**. | The workspace opens with the name and description at the top. Every counter is 0. |
-| 1.2 | **Chat & Q&A**, ask: `What recall did the lightweight CNN reach in daylight?` | *"I cannot answer this based on the provided documents — this project has no matching indexed content yet. Upload a PDF or run a topic search first."* No citations. A new project must not borrow evidence from another project. |
+| 1.2 | **Chat & Q&A**, ask: `What recall did the lightweight CNN reach in daylight?` | *"I cannot answer this based on the provided documents — nothing in this project matched the question. Upload a PDF or run a topic search first."* No citations. A new project must not borrow evidence from another project. |
 
 ## Part 2 — Upload the three papers
 
@@ -85,7 +85,8 @@ What the papers say, so you can check answers against them:
 
 ## Part 3 — Ask questions (Chat & Q&A)
 
-Every answer must cite the paper and page it came from. Click a citation to
+Each question runs the `answer` flow — retriever, synthesis and citation agents — and appears in
+**Agent Activity** like any workflow. Every answer must cite the paper and page it came from. Click a citation to
 see the passage.
 
 | # | Ask | Expected |
@@ -148,7 +149,7 @@ papers to the project, which is why they come after Part 4.
 |---|---|---|
 | 7.1 | **Knowledge Graph** tab. | Nodes for the papers and their concepts, now including the fetched papers. Click a node: its name, type and "Mentioned *n*×" appear. Live concepts look like *convolutional neural network*, *guided waves*, *accelerometer*, *GSM*. *Offline: single keywords such as "Crack" or "Alerts".* |
 | 7.2 | **Agent Activity**: select the Review my project run. | Every stage from 5.4, in order, with its status. The retriever line reads "… graph relations used (*n* chunks boosted)" with *n* above 0. |
-| 7.3 | **Tasks** in the sidebar. | One row per run you started: 13, or 14 with the optional step 4.3 — 3 analyses, 6 workflow runs in Part 4, 3 runs in Part 5 and the patent run. Each has its own id and time. One action never appears twice under the same id. |
+| 7.3 | **Tasks** in the sidebar. | One row per run you started: 18, or 19 with the optional step 4.3 — the 5 chat questions (1.2 and 3.1–3.4, each an `answer` run), 3 analyses, 6 workflow runs in Part 4, 3 runs in Part 5 and the patent run. Each has its own id and time. One action never appears twice under the same id. |
 
 ## Part 8 — Evaluation
 

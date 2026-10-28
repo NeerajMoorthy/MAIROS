@@ -33,16 +33,20 @@ describe("AgentActivity", () => {
     expect(await screen.findByText(/No agent runs yet/i)).toBeInTheDocument();
   });
 
-  it("shows the ordered algorithm trace for the selected run", async () => {
+  it("shows the run as a tree: the Orchestrator over one table per agent", async () => {
     mocked.listTasks.mockResolvedValue([aTask()]);
     render(<AgentActivity projectId="p1" />);
 
-    expect(await screen.findByText(/Algorithm trace/i)).toBeInTheDocument();
-    // Stages the "answer" flow really runs.
-    expect(screen.getByText("Retrieval / Analysis")).toBeInTheDocument();
-    expect(screen.getByText("Synthesis")).toBeInTheDocument();
-    // Stages outside this flow are labelled, not left looking stuck.
-    expect(screen.getAllByText(/Not in this flow/i).length).toBeGreaterThan(0);
+    const tree = await screen.findByRole("figure", { name: /orchestration tree/i });
+    expect(tree).toHaveTextContent("Orchestrator");
+    // The "answer" flow assigns three agents, each a table headed by its name.
+    const tables = screen.getAllByRole("table");
+    expect(tables.map((table) => table.querySelector("th")?.textContent)).toEqual([
+      expect.stringContaining("Retriever"),
+      expect.stringContaining("Synthesis"),
+      expect.stringContaining("Citation"),
+    ]);
+    expect(tables[0]).toHaveTextContent("5 chunks retrieved");
   });
 
   it("renders a failed run's error rather than a blank detail pane", async () => {

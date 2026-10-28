@@ -72,6 +72,8 @@ export interface QueryAnswer {
   answer: string;
   results: RetrievalResult[];
   graph_context: { entity: string; relation: string; related_entity: string }[];
+  /** The agent run (answer flow) that produced this answer; see Agent Activity. */
+  task_id?: string | null;
 }
 
 export interface TaskEvent {

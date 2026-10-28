@@ -222,12 +222,16 @@ class OfflineChatModel(SimpleChatModel):
     def _extraction(self, prompt: str) -> str:
         import json
 
+        from services.knowledge_graph.concepts import co_occurring, concept_phrases
+
+        # The concepts the text repeats — "rail heads", "GSM" — rather than its
+        # most frequent single words, which gave graph nodes like "Heads".
         body = prompt.split("Text:")[-1]
-        terms = self._keywords(body, 6)
+        terms = concept_phrases(body, 8)
         entities = [{"name": t, "type": "Concept", "description": ""} for t in terms]
         relations = [
-            {"subject": terms[i], "relation": "RELATED_TO", "object": terms[i + 1], "confidence": 0.5}
-            for i in range(len(terms) - 1)
+            {"subject": a, "relation": "RELATED_TO", "object": b, "confidence": 0.5}
+            for a, b in co_occurring(terms, body)
         ]
         return json.dumps({"entities": entities, "relations": relations})
 

@@ -67,7 +67,7 @@ Golden Set → Query Pipeline → Collect Outputs → Compute RAGAS Metrics → 
 |-------------------------------|-------------------------------------|
 | Vector-only vs. Hybrid        | Disable KG retrieval                |
 | Fixed vs. Semantic chunking   | Swap chunking strategy              |
-| Single-agent vs. Multi-agent  | Bypass Planner, use single LLM call |
+| Single-agent vs. Multi-agent  | Bypass the agent flow, use a single LLM call |
 | With vs. Without re-ranking   | Disable cross-encoder re-ranker     |
 
 ## Reporting

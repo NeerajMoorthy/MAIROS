@@ -218,34 +218,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <SidebarFooter className="space-y-2">
           {AUTH_ENABLED && <UserMenu />}
-          <div className="rounded-lg border border-frozen/20 bg-black-iris/80 p-2.5 text-xs shadow-sm">
-            <div className="mb-1.5 flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  offline
-                    ? "bg-destructive"
-                    : !health
-                      ? "bg-muted-foreground"
-                      : health.llm.live
-                        ? "bg-success animate-pulse-dot shadow-[0_0_8px_rgba(160,189,219,0.5)]"
-                        : "bg-warning"
-                }`}
-              />
-              <span className="truncate font-medium text-foreground">
-                {offline ? "Backend offline" : health ? "Backend online" : "Checking backend…"}
-              </span>
-            </div>
-            <p className="truncate text-muted-foreground">
-              {offline
-                ? "Start uvicorn on port 8000"
-                : !health
-                  ? "LLM: checking…"
-                  : health.llm.live
-                    ? `LLM: ${health.llm.model}`
-                    : "LLM: offline fallback"}
-            </p>
-          </div>
         </SidebarFooter>
       </Sidebar>
 

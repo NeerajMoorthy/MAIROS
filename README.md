@@ -10,8 +10,8 @@ novelty checking, and a full literature review — each one grounded in passages
 it can quote, plus an evaluation dashboard that measures retrieval quality with
 real IR metrics.
 
-**Everything below runs end to end today**, offline if necessary: 683 backend
-tests and 147 frontend tests pass with no API key, no model download, and no
+**Everything below runs end to end today**, offline if necessary: 695 backend
+tests and 151 frontend tests pass with no API key, no model download, and no
 network (plus 9 Postgres contract tests that run when a test database is
 configured — they pass against PostgreSQL 16).
 
@@ -92,7 +92,7 @@ is no CORS setup and no base URL to configure.
 curl http://localhost:8000/api/health
 # {"status":"ok","llm":{"provider":"groq","model":"llama-3.3-70b-versatile","live":true}, ...}
 
-cd mairos && python -m pytest -q     # 683 tests, no network or API key needed
+cd mairos && python -m pytest -q     # 695 tests, no network or API key needed
 ```
 
 ---
@@ -145,7 +145,7 @@ proxied), `NEXT_PUBLIC_AUTH_ENABLED`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`,
 │  Intake · Literature · Indexer · Loader · Retriever           │
 │  Analysis · Knowledge Graph · Citation · Synthesis            │
 │  Comparison · Gaps · Hypothesis · Experiment · Patent         │
-│  (registered, off by default: Planner)                        │
+│  Novelty · every one used by at least one flow                │
 └───────┬──────────────────────────────┬────────────────────────┘
         │                              │
 ┌───────▼─────────┐          ┌─────────▼──────────┐   ┌─────────┐
@@ -193,7 +193,6 @@ Each is a distinct class in `services/agents/`, callable by the orchestrator.
 | **Hypothesis** | `hypothesis.py` | Proposes falsifiable hypotheses, each attached to an evidenced gap. |
 | **Experiment** | `experiment.py` | Turns a hypothesis into a runnable protocol: objective, data, baselines, metric, procedure, threats. |
 | **Patent Awareness** | `patent_awareness.py` | Locates project concepts in user-supplied patent text down to the claim, and ranks each overlap by an explainable similarity score. Research support only. |
-| Planner | `planner.py` | Decomposes multi-hop questions. Registered, not in a default flow. |
 
 Shared helper: `evidence.py` groups retrieved chunks into labelled sources and
 attaches the passage that best supports a generated claim. It is the reason the
@@ -646,7 +645,8 @@ unaffected. Install with `pip install "ragas>=0.2,<1"` to enable the rest.
 4. Retrieved/analysed content is chunked and embedded into ChromaDB.
 5. The Knowledge Graph agent adds nodes and edges.
 6. The Citation agent produces APA references.
-7. Ask a question in **Chat & Q&A** → RAG retrieves and answers with inline
+7. Ask a question in **Chat & Q&A** → the `answer` flow (retriever → synthesis →
+   citation agents) retrieves and answers with inline
    citations and the source passages beneath.
 
 Watch every step live in the **Agent Activity** tab — which agent ran, at what
@@ -722,7 +722,7 @@ means what it meant before; `stats` and `evaluation/status` are additive.
 | `POST` | `/api/projects/{id}/documents` | Upload a PDF (returns `task_id`) |
 | `POST` | `/api/projects/{id}/query` | RAG: answer + grounding passages |
 | `POST` | `/api/projects/{id}/retrieve` | Retrieval only, no generation |
-| `POST` | `/api/projects/{id}/chat` | Streaming answer (SSE) |
+| `POST` | `/api/projects/{id}/chat` | The same agent run as `/query`, streamed: one `step` event per agent event, then `sources`, the answer, `done` (SSE) |
 | `POST` | `/api/projects/{id}/tasks` | Run the multi-agent pipeline (any registered `flow`) |
 | `GET` | `/api/flows` | Registered flows and the agents each one runs |
 | `GET` | `/api/tasks` · `/api/tasks/{id}` | Task list / live state |
@@ -870,7 +870,7 @@ four-panel UI) and the Stage 1 UI/UX pass documented above.
 
 | Planned feature | Where it goes |
 |---|---|
-| Research planning | `PlannerAgent` already exists — add `"planner"` to a flow. |
+| Research planning | A planner agent that splits a multi-part question into sub-questions before retrieval; register it and name it in a flow (a test refuses an agent no flow uses). |
 | Persistent memory across sessions | The SQLite store is in place; a memory agent would read prior tasks from the `tasks` table. |
 | Neo4j instead of NetworkX | Reimplement `ProjectGraph`'s five methods; `GraphRetriever` keeps its interface. |
 | Cross-encoder re-ranking | `CrossEncoderReranker` exists — pass it to `HybridRetriever(reranker=...)`. |
@@ -881,13 +881,13 @@ four-panel UI) and the Stage 1 UI/UX pass documented above.
 
 ```bash
 cd mairos
-python -m pytest -q            # 683 backend tests (+9 Postgres, skipped without a test DB)
+python -m pytest -q            # 695 backend tests (+9 Postgres, skipped without a test DB)
 python -m pytest tests/test_agents.py -v
 
 # Run the store contract against a real Postgres too:
 MAIROS_TEST_DATABASE_URL=postgresql://... python -m pytest tests/test_database_contract.py
 
-cd apps/web && npm test        # 147 frontend tests (Vitest + Testing Library)
+cd apps/web && npm test        # 151 frontend tests (Vitest + Testing Library)
 npx tsc --noEmit && npm run build
 ```
 

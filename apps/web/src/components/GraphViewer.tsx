@@ -34,6 +34,21 @@ const ForceGraph2D = dynamic(
 );
 
 /** Shorten a label so long paper titles do not smear across the canvas. */
+/** A d3 force that pulls every node gently towards the origin. */
+function towardsCentre(strength: number) {
+  let nodes: { x?: number; y?: number; vx?: number; vy?: number }[] = [];
+  const force = (alpha: number) => {
+    for (const node of nodes) {
+      node.vx = (node.vx ?? 0) - (node.x ?? 0) * strength * alpha;
+      node.vy = (node.vy ?? 0) - (node.y ?? 0) * strength * alpha;
+    }
+  };
+  force.initialize = (all: typeof nodes) => {
+    nodes = all;
+  };
+  return force;
+}
+
 function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
@@ -107,15 +122,25 @@ export function GraphViewer({ projectId }: { projectId: string }) {
     return () => observer.disconnect();
   }, [data]);
 
-  // Spread the layout out: the default charge packs nodes so tightly that
-  // labels overlap and the graph reads as a blob.
-  useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph || !data?.nodes.length) return;
+  // The layout forces are set the moment the graph component attaches. They
+  // used to be set in an effect on `data`, which ran before the lazily loaded
+  // component existed, so it returned early and the default forces were used:
+  // a tight blob, or disconnected clusters flung to the edges.
+  const attachGraph = useCallback((graph: any) => {
+    graphRef.current = graph;
+    if (!graph) return;
+    // Spread nodes enough for their labels, within a limited range.
+    graph.d3Force("charge")?.strength(-260).distanceMax(240);
+    graph.d3Force("link")?.distance(70);
+    // Papers that share no concept form separate clusters; a weak pull to the
+    // centre keeps them side by side instead of flung apart.
+    graph.d3Force("gravity", towardsCentre(0.05));
+    graph.d3ReheatSimulation?.();
+  }, []);
 
-    graph.d3Force("charge")?.strength(-520).distanceMax(600);
-    graph.d3Force("link")?.distance(110);
-    const timer = setTimeout(() => graph.zoomToFit?.(500, 80), 1600);
+  useEffect(() => {
+    if (!data?.nodes.length) return;
+    const timer = setTimeout(() => graphRef.current?.zoomToFit?.(500, 60), 1600);
     return () => clearTimeout(timer);
   }, [data]);
 
@@ -184,7 +209,7 @@ export function GraphViewer({ projectId }: { projectId: string }) {
           </div>
         ) : (
           <ForceGraph2D
-            innerRef={graphRef}
+            innerRef={attachGraph}
             graphData={data as GraphData}
             width={size.width}
             height={size.height}
@@ -230,7 +255,7 @@ export function GraphViewer({ projectId }: { projectId: string }) {
             linkWidth={0.8}
             cooldownTicks={200}
             d3VelocityDecay={0.32}
-            onEngineStop={() => graphRef.current?.zoomToFit?.(500, 80)}
+            onEngineStop={() => graphRef.current?.zoomToFit?.(500, 60)}
             onNodeClick={(node: any) => setSelected(node as GraphNode)}
           />
         )}

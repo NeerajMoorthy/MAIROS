@@ -6,6 +6,13 @@ on Vercel; the API runs on the project owner's PC and is reached through a free
 26 October 2026; before that, a Cloudflare quick tunnel). It is up only while
 that PC is on, awake, online and running it.
 
+**27 October 2026:** Microsoft Defender quarantined `ngrok.exe` as
+`Trojan:Win32/Kepavll!rfn`, a reputation-based detection that commonly hits
+ngrok. Until the owner reviews it in Windows Security → Protection history,
+the demo runs on a Cloudflare quick tunnel again (`publish_demo.py
+--cloudflare`). Going back to ngrok is `publish_demo.py --ngrok-domain
+maximize-aground-booted.ngrok-free.dev`.
+
 Why ngrok: its address never changes, so a restart needs no redeploy, and it
 runs over ordinary HTTPS. On 26 October the network this PC was on blocked the
 ports Cloudflare's tunnel needs (outbound UDP and TCP 7844), and ngrok worked

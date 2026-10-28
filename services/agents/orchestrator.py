@@ -28,7 +28,6 @@ from .kg_agent import KnowledgeGraphAgent
 from .literature import LiteratureAgent
 from .novelty import NoveltyAgent
 from .patent_awareness import PatentAwarenessAgent
-from .planner import PlannerAgent
 from .router import FLOWS, RouterAgent
 from .synthesis import SynthesisAgent
 
@@ -71,8 +70,6 @@ class AgentOrchestrator:
             "novelty": NoveltyAgent(llm=llm),
             "patent_awareness": PatentAwarenessAgent(llm=llm),
             "intake": ProjectIntakeAgent(llm=llm),
-            # Registered but not in a default flow — see router.FLOWS.
-            "planner": PlannerAgent(llm=llm),
         }
 
     # ------------------------------------------------------------------
@@ -92,6 +89,7 @@ class AgentOrchestrator:
         emit_event: Callable[..., None] | None = None,
         flow_type: str | None = None,
         doc_count: int = 0,
+        top_k: int | None = None,
     ) -> AgentContext:
         """Execute the pipeline and return the completed context.
 
@@ -103,6 +101,8 @@ class AgentOrchestrator:
                 omit to let the Router decide.
             doc_count: How many documents the project already has — the Router
                 uses this to avoid sending an empty library down the RAG path.
+            top_k: Passages the retriever returns for this run, when the
+                caller asks for a number other than the default.
 
         Returns:
             The :class:`AgentContext` carrying every agent's output.
@@ -117,6 +117,8 @@ class AgentOrchestrator:
             task_id=task_id,
             emit_event=emit_event,
         )
+        if top_k:
+            ctx.intermediate_results["top_k"] = top_k
 
         # 1. Decide the plan.
         decision = self.router.decide(

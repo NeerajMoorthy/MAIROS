@@ -127,8 +127,9 @@ class RetrieverAgent(BaseAgent):
         from services.retrieval.hybrid import HybridRetriever
 
         retriever = HybridRetriever(vector=ctx.chroma_store)
+        top_k = ctx.intermediate_results.get("top_k") or self.top_k
         chunks, graph_results = retriever.retrieve(
-            ctx.focus_text(), project_id=ctx.project_id, top_k=self.top_k
+            ctx.focus_text(), project_id=ctx.project_id, top_k=top_k
         )
 
         ctx.retrieved_chunks = [

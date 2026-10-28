@@ -194,6 +194,7 @@ class ChromaStore:
                 "chunk_id": cid,
                 "text": doc,
                 "document_name": (meta or {}).get("document_name", ""),
+                "title": (meta or {}).get("title", ""),
                 "page": (meta or {}).get("page"),
                 "chunk_index": (meta or {}).get("chunk_index", 0),
             }

@@ -229,6 +229,8 @@ class RetrievalResponse(BaseModel):
     answer: str = ""
     results: list[RetrievalResult] = Field(default_factory=list)
     graph_context: list[dict] = Field(default_factory=list)
+    # The agent run that produced the answer, shown in Agent Activity.
+    task_id: str | None = None
 
 
 class QueryResponse(BaseModel):

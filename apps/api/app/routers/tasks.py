@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from typing import Callable
 
+import anyio
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -24,6 +26,7 @@ from schemas import (
     TaskStage,
     TaskStatus,
 )
+from services.agents.base import AgentContext
 
 router = APIRouter(tags=["tasks"])
 
@@ -70,13 +73,36 @@ async def run_pipeline(
     document_id: str | None = None,
 ) -> None:
     """Execute the orchestrator and record the result on the task."""
+    await execute_task(task_id, question, project_id, flow, document_id)
+
+
+async def execute_task(
+    task_id: str,
+    question: str,
+    project_id: str,
+    flow: str | None = None,
+    document_id: str | None = None,
+    *,
+    top_k: int | None = None,
+    on_event: Callable[..., None] | None = None,
+) -> AgentContext | None:
+    """Run a task through the orchestrator, record events and result, and
+    return the finished context — ``None`` if the task is gone or the run
+    crashed (the error is recorded on the task).
+
+    ``on_event`` also receives every event as it is recorded, for a caller
+    that relays them live (the streaming chat endpoint).
+    """
     if not metadata_store.get_task(task_id):
-        return
+        return None
+
+    def emit(*event) -> None:
+        _emit_event(*event)
+        if on_event is not None:
+            on_event(*event)
 
     try:
-        _emit_event(
-            task_id, "orchestrator", "orchestrating", "running", "Task accepted"
-        )
+        emit(task_id, "orchestrator", "orchestrating", "running", "Task accepted")
 
         orchestrator = get_orchestrator()
         ctx = await orchestrator.run(
@@ -84,9 +110,10 @@ async def run_pipeline(
             project_id=project_id,
             document_id=document_id,
             task_id=task_id,
-            emit_event=_emit_event,
+            emit_event=emit,
             flow_type=flow,
             doc_count=metadata_store.count_documents(project_id),
+            top_k=top_k,
         )
 
         results = ctx.intermediate_results
@@ -128,10 +155,35 @@ async def run_pipeline(
                 project_brief=results.get("project_brief"),
             ),
         )
+        return ctx
 
     except Exception as exc:  # a crash must still surface in the UI
-        _emit_event(task_id, "orchestrator", "failed", "failed", str(exc))
+        emit(task_id, "orchestrator", "failed", "failed", str(exc))
         metadata_store.update_task_error(task_id, f"{type(exc).__name__}: {exc}")
+        return None
+
+
+async def answer_through_agents(
+    project_id: str,
+    question: str,
+    top_k: int | None = None,
+    on_event: Callable[..., None] | None = None,
+) -> tuple[str, AgentContext | None]:
+    """Answer a chat question with the orchestrator's ``answer`` flow.
+
+    Chat used to call retrieval and generation directly, so its questions
+    never passed through the agents or appeared in Agent Activity. Now each
+    question is a recorded task like any workflow. The run gets its own thread
+    and event loop for the same reason as :func:`dispatch_pipeline`: agents
+    embed and call the model synchronously in places.
+    """
+    task = metadata_store.create_task(project_id=project_id, request=question, flow="answer")
+    ctx = await anyio.to_thread.run_sync(
+        lambda: asyncio.run(
+            execute_task(task.id, question, project_id, "answer", top_k=top_k, on_event=on_event)
+        )
+    )
+    return task.id, ctx
 
 
 def dispatch_pipeline(

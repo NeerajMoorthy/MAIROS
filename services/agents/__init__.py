@@ -17,7 +17,6 @@ from .intake import ProjectIntakeAgent
 from .kg_agent import KnowledgeGraphAgent
 from .literature import LiteratureAgent
 from .orchestrator import AgentOrchestrator
-from .planner import PlannerAgent
 from .router import FLOWS, RouterAgent, RoutingDecision
 from .synthesis import SynthesisAgent
 
@@ -36,7 +35,6 @@ __all__ = [
     "IndexerAgent",
     "LoaderAgent",
     "RetrieverAgent",
-    "PlannerAgent",
     "ComparisonAgent",
     "ProjectIntakeAgent",
 ]

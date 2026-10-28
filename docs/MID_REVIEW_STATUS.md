@@ -1,9 +1,9 @@
 # Project Status
 
 Current as of 25 October 2026 (the Stage B build plus the literature-search
-additions below). **683 backend tests**
+additions below). **695 backend tests**
 (`python -m pytest -q`, plus 9 Postgres contract tests that run against a test
-database) and **147 frontend tests** (`cd apps/web && npm test`) pass offline —
+database) and **151 frontend tests** (`cd apps/web && npm test`) pass offline —
 no API key, no model download, no network. TypeScript is clean under `strict`;
 the production build and the Cloudflare Worker bundle both build.
 
