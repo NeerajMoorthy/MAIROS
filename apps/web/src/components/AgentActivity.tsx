@@ -6,8 +6,6 @@ import { AlertTriangle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import { OrchestrationTree } from "@/components/OrchestrationTree";
 import { TaskAnswer, WorkflowSections } from "@/components/TaskResultView";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { STAGES, api, humanise, type Task } from "@/lib/api";
 import { describeError } from "@/lib/errorMessage";
 
@@ -16,6 +14,8 @@ interface Props {
   selectedTaskId?: string | null;
   onSelect?: (taskId: string) => void;
   onSettled?: () => void;
+  /** The run on show changed (or its flow became known); `null` when there is none. */
+  onRunChange?: (task: Task | null) => void;
 }
 
 const POLL_MS = 1500;
@@ -67,7 +67,7 @@ function TaskRow({ task, selected, onClick }: { task: Task; selected: boolean; o
         selected ? "border-primary bg-accent/40" : ""
       }`}
     >
-      <p className="line-clamp-2 text-sm font-medium">{task.request}</p>
+      <p className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]">{task.request}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <StatusBadge status={task.status} />
         {flow && (
@@ -84,8 +84,8 @@ function TaskRow({ task, selected, onClick }: { task: Task; selected: boolean; o
   );
 }
 
-/** Tab (c): live view of which agent ran, when, and what it produced. */
-export function AgentActivity({ projectId, selectedTaskId, onSelect, onSettled }: Props) {
+/** Live view of every agent run: which agent ran, when, and what it produced. */
+export function AgentActivity({ projectId, selectedTaskId, onSelect, onSettled, onRunChange }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selected, setSelected] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +132,17 @@ export function AgentActivity({ projectId, selectedTaskId, onSelect, onSettled }
     }
   }, [projectId, selectedId, onSelect, onSettled]);
 
+  // Polling replaces `selected` every tick; tell the parent only when the run
+  // or its flow actually changes, so it can light that flow's agents.
+  const shownFlow = selected ? (selected.flow ?? selected.result?.routing?.flow ?? null) : null;
+  const onRunChangeRef = useRef(onRunChange);
+  onRunChangeRef.current = onRunChange;
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  useEffect(() => {
+    onRunChangeRef.current?.(selectedRef.current);
+  }, [selected?.id, shownFlow]);
+
   useEffect(() => {
     void poll();
     const timer = setInterval(poll, POLL_MS);
@@ -146,127 +157,109 @@ export function AgentActivity({ projectId, selectedTaskId, onSelect, onSettled }
     : 0;
 
   return (
-    // Below `lg` the two cards stack and the page scrolls; giving both a share
-    // of one fixed height clipped the detail card on phones.
-    <div className="grid grid-cols-1 gap-4 py-2 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,2fr)]">
-      <Card className="flex min-w-0 flex-col overflow-hidden lg:min-h-0">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Runs</CardTitle>
-        </CardHeader>
-        <CardContent className="max-h-[40vh] min-h-0 flex-1 p-0 lg:max-h-none">
-          <ScrollArea className="h-full px-4 pb-4">
-            {pollError && (
-              <p role="alert" className="my-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-                {pollError}
-              </p>
-            )}
-            {loading ? (
-              <p role="status" className="py-8 text-center text-sm text-muted-foreground">
-                Loading…
-              </p>
-            ) : tasks.length === 0 ? (
-              pollError ? null : (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No agent runs yet. Upload a PDF or search a topic to start one.
-                </p>
-              )
-            ) : (
-              <div className="space-y-2">
-                {tasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    selected={selectedId === task.id}
-                    onClick={() => {
-                      setSelected(task);
-                      onSelect?.(task.id);
-                    }}
-                  />
-                ))}
+    // Shown under the agent map on Tasks: the runs as one scrolling row, and
+    // the chosen run's trace below it, rather than two side-by-side panels.
+    <div className="space-y-5">
+      <div>
+        <h3 className="mb-2 text-sm font-medium">Runs</h3>
+        {pollError && (
+          <p role="alert" className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+            {pollError}
+          </p>
+        )}
+        {loading ? (
+          <p role="status" className="py-4 text-sm text-muted-foreground">
+            Loading…
+          </p>
+        ) : tasks.length === 0 ? (
+          pollError ? null : (
+            <p className="py-4 text-sm text-muted-foreground">
+              No agent runs yet. Upload a PDF or search a topic to start one.
+            </p>
+          )
+        ) : (
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+            {tasks.map((task) => (
+              <div key={task.id} className="w-64 shrink-0 sm:w-72">
+                <TaskRow
+                  task={task}
+                  selected={selectedId === task.id}
+                  onClick={() => {
+                    setSelected(task);
+                    onSelect?.(task.id);
+                  }}
+                />
               </div>
-            )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
-      <Card className="flex min-w-0 flex-col overflow-hidden lg:min-h-0">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Pipeline detail</CardTitle>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 p-0">
-          <ScrollArea className="h-full px-6 pb-6">
-            {!selected ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">
-                Select a run to inspect it.
+      {selected && (
+        // Keyed by run, so nothing from one run's detail (expanded passages,
+        // disclosure state) carries over to the next.
+        <div key={selected.id} className="min-w-0 space-y-6 rounded-xl border border-frozen/10 bg-black-iris/50 p-4 sm:p-5">
+          <div>
+            <h3 className="font-medium">{selected.request}</h3>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusBadge status={selected.status} />
+              {selected.current_stage !== selected.status && (
+                <Badge variant="outline">{humanise(selected.current_stage)}</Badge>
+              )}
+              {selected.result?.routing && (
+                <Badge variant="secondary">flow: {selected.result.routing.flow}</Badge>
+              )}
+              <span className="font-mono text-xs text-muted-foreground">run #{selected.id.slice(0, 6)}</span>
+            </div>
+            {selected.result?.routing?.reason && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Router ({selected.result.routing.decided_by}): {selected.result.routing.reason}
               </p>
-            ) : (
-              // Keyed by run, so nothing from one run's detail (expanded
-              // passages, disclosure state) carries over to the next.
-              <div key={selected.id} className="space-y-6">
-                <div>
-                  <h3 className="font-medium">{selected.request}</h3>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <StatusBadge status={selected.status} />
-                    {selected.current_stage !== selected.status && (
-                      <Badge variant="outline">{humanise(selected.current_stage)}</Badge>
-                    )}
-                    {selected.result?.routing && (
-                      <Badge variant="secondary">flow: {selected.result.routing.flow}</Badge>
-                    )}
-                    <span className="font-mono text-xs text-muted-foreground">run #{selected.id.slice(0, 6)}</span>
-                  </div>
-                  {selected.result?.routing?.reason && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Router ({selected.result.routing.decided_by}): {selected.result.routing.reason}
-                    </p>
-                  )}
-                </div>
-
-                <div
-                  className="h-2 w-full overflow-hidden rounded-full bg-muted"
-                  role="progressbar"
-                  aria-label="Pipeline progress"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={Math.round(progress)}
-                >
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      selected.status === "failed" ? "bg-destructive" : "bg-primary"
-                    }`}
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-
-                <div>
-                  <h4 className="mb-3 text-sm font-medium">
-                    Orchestration tree — the Orchestrator assigns each step to an agent
-                  </h4>
-                  {selected.events.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No events yet.</p>
-                  ) : (
-                    <OrchestrationTree task={selected} />
-                  )}
-                </div>
-
-                {selected.error && (
-                  <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
-                    <p className="text-sm font-medium">Workflow failed</p>
-                    <p className="mt-1 break-words text-sm text-muted-foreground">{selected.error}</p>
-                  </div>
-                )}
-
-                {selected.result && (
-                  <>
-                    <WorkflowSections result={selected.result} />
-                    <TaskAnswer result={selected.result} />
-                  </>
-                )}
-              </div>
             )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+          </div>
+
+          <div
+            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Pipeline progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+          >
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                selected.status === "failed" ? "bg-destructive" : "bg-primary"
+              }`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <div className="min-w-0 overflow-x-auto">
+            <h4 className="mb-3 text-sm font-medium">
+              Orchestration tree — the Orchestrator assigns each step to an agent
+            </h4>
+            {selected.events.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No events yet.</p>
+            ) : (
+              <OrchestrationTree task={selected} />
+            )}
+          </div>
+
+          {selected.error && (
+            <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+              <p className="text-sm font-medium">Workflow failed</p>
+              <p className="mt-1 break-words text-sm text-muted-foreground">{selected.error}</p>
+            </div>
+          )}
+
+          {selected.result && (
+            <>
+              <WorkflowSections result={selected.result} />
+              <TaskAnswer result={selected.result} />
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
