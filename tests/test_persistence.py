@@ -92,6 +92,48 @@ class TestRestartDurability:
         assert restored is not None
         assert [e.message for e in restored.events] == ["Task accepted"]
 
+    def test_a_step_event_does_not_end_a_run_that_is_still_going(self, store):
+        """A degraded agent logs "failed" and the orchestrator logs
+        "completed" before the result is saved. Either used to end the task
+        mid-run, so a project with runs in progress showed none running."""
+        project = store.create_project("Busy")
+        task = store.create_task(project.id, "long job")
+
+        for status in (TaskStatus.RUNNING, TaskStatus.FAILED, TaskStatus.COMPLETED):
+            store.add_task_event(
+                TaskEvent(task_id=task.id, agent_name="analysis", status=status, message="step")
+            )
+            assert store.get_task(task.id).status == TaskStatus.RUNNING
+
+        store.update_task_result(task.id, QueryResponse(answer="Done."))
+        assert store.get_task(task.id).status == TaskStatus.COMPLETED
+        # A late event cannot reopen a finished run.
+        store.add_task_event(TaskEvent(task_id=task.id, agent_name="late", message="late"))
+        assert store.get_task(task.id).status == TaskStatus.COMPLETED
+
+    def test_a_run_cut_off_by_a_restart_stops_counting_as_running(self, store):
+        """A run lives in the process that started it, so after a restart a
+        queued or running task can never finish. It used to count as running
+        forever on the workspace header."""
+        project = store.create_project("Restarted")
+        running = store.create_task(project.id, "mid-pipeline")
+        store.add_task_event(
+            TaskEvent(task_id=running.id, agent_name="orchestrator", message="Task accepted")
+        )
+        queued = store.create_task(project.id, "never started")
+        done = store.create_task(project.id, "finished")
+        store.update_task_result(done.id, QueryResponse(answer="Yes."))
+
+        restarted = reopen(store)
+
+        for task_id in (running.id, queued.id):
+            task = restarted.get_task(task_id)
+            assert task.status == TaskStatus.FAILED
+            assert "restarted" in task.error
+        assert restarted.get_task(done.id).status == TaskStatus.COMPLETED
+        # The change is stored, not only applied in memory.
+        assert reopen(restarted).get_task(running.id).status == TaskStatus.FAILED
+
     def test_task_history_is_not_capped_at_forty(self, store):
         """The old snapshot dropped everything past MAX_PERSISTED_TASKS."""
         project = store.create_project("Many")
