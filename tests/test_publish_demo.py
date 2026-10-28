@@ -83,7 +83,7 @@ def _task(program: str, arguments: str, workdir: str) -> ET.Element:
     return ET.fromstring(xml.encode("utf-16"))
 
 
-def test_watchdog_task_runs_on_battery_and_repeats_every_five_minutes():
+def test_watchdog_task_runs_on_battery_and_repeats_every_minute():
     task = _task(r"C:\mairos\.venv\Scripts\pythonw.exe", "--watchdog", r"C:\mairos")
     settings = task.find("t:Settings", _TASK_NS)
     # schtasks' defaults would skip every run on a laptop that is not charging.
@@ -93,7 +93,7 @@ def test_watchdog_task_runs_on_battery_and_repeats_every_five_minutes():
     assert settings.findtext("t:MultipleInstancesPolicy", namespaces=_TASK_NS) == "IgnoreNew"
     trigger = task.find("t:Triggers/t:TimeTrigger", _TASK_NS)
     assert trigger.findtext("t:StartBoundary", namespaces=_TASK_NS) == "2026-10-28T16:05:09"
-    assert trigger.findtext("t:Repetition/t:Interval", namespaces=_TASK_NS) == "PT5M"
+    assert trigger.findtext("t:Repetition/t:Interval", namespaces=_TASK_NS) == "PT1M"
     assert trigger.find("t:Repetition/t:Duration", _TASK_NS) is None  # repeats indefinitely
 
 
