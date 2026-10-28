@@ -36,6 +36,16 @@ function useRadius() {
   return { stage, radius };
 }
 
+interface Props {
+  /** The flow on show; pass it with onFlowChange to control the map from outside. */
+  flowId?: string | null;
+  onFlowChange?: (flowId: string | null) => void;
+  /** A line above the scene, e.g. which run the lit agents belong to. */
+  caption?: React.ReactNode;
+  /** Shown under the scene, inside the same panel. */
+  children?: React.ReactNode;
+}
+
 /**
  * The orchestrator and its agents as a slowly turning 3D ring. Picking a flow
  * lights the agents it assigns, numbered in the order they run, and sends work
@@ -43,10 +53,15 @@ function useRadius() {
  * stay crisp, need no WebGL, and the list below repeats everything for screen
  * readers.
  */
-export function AgentNetwork3D() {
+export function AgentNetwork3D({ flowId: controlledFlowId, onFlowChange, caption, children }: Props = {}) {
   const reduceMotion = useReducedMotion();
   const { stage, radius } = useRadius();
-  const [flowId, setFlowId] = useState<string | null>("search");
+  const [ownFlowId, setOwnFlowId] = useState<string | null>("search");
+  const flowId = controlledFlowId === undefined ? ownFlowId : controlledFlowId;
+  const setFlowId = (id: string | null) => {
+    setOwnFlowId(id);
+    onFlowChange?.(id);
+  };
   const angle = useMotionValue(0);
   const counter = useTransform(angle, (a) => -a);
 
@@ -82,6 +97,8 @@ export function AgentNetwork3D() {
           </FlowChip>
         ))}
       </div>
+
+      {caption && <div className="mt-3 text-xs text-muted-foreground">{caption}</div>}
 
       <div
         ref={stage}
@@ -144,6 +161,7 @@ export function AgentNetwork3D() {
       </div>
 
       <FlowLegend steps={steps} byId={byId} flowLabel={flow?.label ?? null} />
+      {children}
     </section>
   );
 }

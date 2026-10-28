@@ -159,7 +159,7 @@ describe("Patents page — list and detail", () => {
     await user.click(await screen.findByRole("button", { name: /Run patent workflow/ }));
     await waitFor(() => expect(mocked.createTask).toHaveBeenCalled());
     expect(mocked.createTask.mock.calls[0][2]).toBe("patent");
-    expect(push).toHaveBeenCalledWith("/projects/p1?tab=activity");
+    expect(push).toHaveBeenCalledWith("/tasks");
   });
 
   it("has no WCAG 2.1 AA violations axe can detect, populated", async () => {

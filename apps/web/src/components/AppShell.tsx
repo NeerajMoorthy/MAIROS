@@ -1,14 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   BrainCircuit,
   FlaskConical,
   FolderKanban,
-  Network,
   PanelsTopLeft,
   ScrollText,
 } from "lucide-react";
@@ -41,58 +40,39 @@ function currentProjectId(pathname: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-/** Suspense-wrapped observer for search params to track active tab (e.g. ?tab=graph). */
-function SearchParamsWatcher({ onChange }: { onChange: (tab: string | null) => void }) {
-  const tab = useSearchParams().get("tab");
-  useEffect(() => {
-    onChange(tab);
-  }, [tab, onChange]);
-  return null;
-}
-
-interface Location {
-  pathname: string;
-  tab: string | null;
-}
-
 interface NavItem {
   label: string;
   icon: typeof FolderKanban;
   /** Global routes have an href; project routes a path below /projects/{id}. */
   href?: string;
   projectPath?: string;
-  isActive: (location: Location) => boolean;
+  isActive: (pathname: string) => boolean;
 }
 
 const inProject = (pathname: string) => /^\/projects\/[^/]+/.test(pathname);
 const inPatents = (pathname: string) => /^\/projects\/[^/]+\/patents/.test(pathname);
 
 const NAV: NavItem[] = [
-  { label: "Projects", icon: FolderKanban, href: "/", isActive: ({ pathname }) => pathname === "/" },
+  { label: "Projects", icon: FolderKanban, href: "/", isActive: (pathname) => pathname === "/" },
   {
+    // The Knowledge Graph is one of the Workspace's tabs, so it has no entry of its own.
     label: "Workspace",
     icon: PanelsTopLeft,
     projectPath: "",
-    isActive: ({ pathname, tab }) => inProject(pathname) && !inPatents(pathname) && tab !== "graph",
+    isActive: (pathname) => inProject(pathname) && !inPatents(pathname),
   },
   {
     label: "Patents",
     icon: ScrollText,
     projectPath: "/patents",
-    isActive: ({ pathname }) => inPatents(pathname),
+    isActive: (pathname) => inPatents(pathname),
   },
-  { label: "Tasks", icon: Activity, href: "/tasks", isActive: ({ pathname }) => pathname.startsWith("/tasks") },
-  {
-    label: "Knowledge Graph",
-    icon: Network,
-    projectPath: "?tab=graph",
-    isActive: ({ pathname, tab }) => inProject(pathname) && !inPatents(pathname) && tab === "graph",
-  },
+  { label: "Tasks", icon: Activity, href: "/tasks", isActive: (pathname) => pathname.startsWith("/tasks") },
   {
     label: "Evaluation",
     icon: FlaskConical,
     href: "/evaluation",
-    isActive: ({ pathname }) => pathname.startsWith("/evaluation"),
+    isActive: (pathname) => pathname.startsWith("/evaluation"),
   },
 ];
 
@@ -107,7 +87,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const urlProjectId = currentProjectId(pathname);
 
   const [rememberedProjectId, setRememberedProjectId] = useState<string | null>(null);
-  const [currentTab, setCurrentTab] = useState<string | null>(null);
 
   useEffect(() => {
     if (urlProjectId) {
@@ -159,15 +138,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const location: Location = { pathname, tab: currentTab };
-  const activeItem = NAV.find((item) => item.isActive(location));
+  const activeItem = NAV.find((item) => item.isActive(pathname));
 
   return (
     <SidebarProvider>
-      <Suspense fallback={null}>
-        <SearchParamsWatcher onChange={setCurrentTab} />
-      </Suspense>
-
       <div className="print:hidden">
         <AmbientBackground />
       </div>

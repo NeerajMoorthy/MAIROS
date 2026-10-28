@@ -178,7 +178,8 @@ export default function PatentsPage() {
     setActionError(null);
     try {
       await api.createTask(projectId, PATENT_FLOW_QUESTION, "patent");
-      router.push(`/projects/${projectId}?tab=activity`);
+      // Every run's live trace is on the Tasks page.
+      router.push("/tasks");
     } catch (err) {
       setActionError(describeError(err, "Could not start the patent workflow."));
       setBusy(null);
