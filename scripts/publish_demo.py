@@ -6,6 +6,7 @@
     .venv\\Scripts\\python scripts\\publish_demo.py --localhost-run   # once: use localhost.run
     .venv\\Scripts\\python scripts\\publish_demo.py --restart-api   # load code changes into the API
     .venv\\Scripts\\python scripts\\publish_demo.py --stop          # stop what this script started
+    .venv\\Scripts\\python scripts\\publish_demo.py --install-autostart   # once: keep it up on its own
 
 The website (https://mairos.vercel.app) forwards every /api request to
 MAIROS_API_URL, which Next.js reads at build time. For this demo that address
@@ -25,6 +26,11 @@ is a tunnel to an API server on this machine, one of:
 The script redeploys the site only when the address it forwards to has
 changed (a minute or two): with ngrok, only the first time. A tunnel it started
 earlier that still answers is reused.
+
+`--install-autostart` (Windows) adds a scheduled task that runs this script
+every 5 minutes without a window (`--watchdog`): after a restart, a sleep or a
+dropped tunnel it brings the API and tunnel back and redeploys when the
+address changed, so the site recovers on its own while this PC is on.
 
 The API and the tunnel run in the background and keep running after this
 script ends. Their logs and process ids live in the demo's data folder, which
@@ -49,7 +55,9 @@ import subprocess
 import sys
 import time
 import urllib.request
+from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
@@ -62,6 +70,13 @@ TUNNEL_ADDRESS = re.compile(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com")
 # localhost.run prints its address as https://<id>.lhr.life. Its banner also
 # links to admin.localhost.run and localhost.run/docs, which are not tunnels.
 LHR_ADDRESS = re.compile(r"https://[a-z0-9-]+\.lhr\.life")
+TASK_NAME = "MAIROS demo"
+WATCHDOG_MINUTES = 5
+# Console programs started from pythonw.exe (the watchdog) would each flash a
+# window of their own.
+NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if WINDOWS else {}
+# Set by --watchdog: where the Vercel CLI's output goes instead of a console.
+watchdog_log = None
 
 
 def healthy(base_url: str) -> bool:
@@ -113,7 +128,7 @@ def running(entry: dict | None) -> bool:
     if WINDOWS:
         listing = subprocess.run(
             ["tasklist", "/FI", f"PID eq {entry['pid']}", "/FO", "CSV", "/NH"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, **NO_WINDOW,
         ).stdout
         # The image name guards against Windows reusing the id for another program.
         return f'"{entry["image"]}"'.lower() in listing.lower()
@@ -129,7 +144,7 @@ def stop(entry: dict) -> None:
         # /T stops the whole tree: the virtual environment's python.exe is a
         # launcher that runs the real interpreter as a child, and stopping the
         # launcher alone would leave the server holding the port.
-        subprocess.run(["taskkill", "/PID", str(entry["pid"]), "/T", "/F"], capture_output=True)
+        subprocess.run(["taskkill", "/PID", str(entry["pid"]), "/T", "/F"], capture_output=True, **NO_WINDOW)
     else:
         os.killpg(entry["pid"], signal.SIGTERM)
 
@@ -195,7 +210,12 @@ def vercel(*args: str) -> None:
     npx = shutil.which("npx")
     if not npx:
         raise SystemExit("npx not found: install Node.js 18 or later.")
-    result = subprocess.run([npx, "--yes", VERCEL_CLI, *args], cwd=ROOT / "apps" / "web")
+    # NO_UPDATE_NOTIFIER: the pinned CLI otherwise asks "Would you like to
+    # upgrade now? (Y/n)" and waits for an answer nobody is there to give.
+    options = {"env": {**os.environ, "NO_UPDATE_NOTIFIER": "1"}}
+    if watchdog_log is not None:
+        options.update(stdin=subprocess.DEVNULL, stdout=watchdog_log, stderr=subprocess.STDOUT, **NO_WINDOW)
+    result = subprocess.run([npx, "--yes", VERCEL_CLI, *args], cwd=ROOT / "apps" / "web", **options)
     if result.returncode != 0:
         raise SystemExit(
             f"vercel {args[0]} failed (exit {result.returncode}); see the output above. "
@@ -205,6 +225,98 @@ def vercel(*args: str) -> None:
 
 def save(state_file: Path, state: dict) -> None:
     state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def watchdog_task_xml(program: Path, arguments: str, workdir: Path, start: datetime) -> str:
+    """Task Scheduler definition: run ``program`` every few minutes while signed in.
+
+    Laptops matter here: schtasks' own defaults skip a task on battery power and
+    stop it when the charger is pulled. A run still going when the next is due
+    is left alone (IgnoreNew), and a run missed while asleep starts on waking.
+    """
+    return f"""<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Keeps the MAIROS demo (https://mairos.vercel.app) up: restarts the API and tunnel on this PC and redeploys when the tunnel's address changes.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <TimeTrigger>
+      <StartBoundary>{start:%Y-%m-%dT%H:%M:%S}</StartBoundary>
+      <Repetition>
+        <Interval>PT{WATCHDOG_MINUTES}M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <ExecutionTimeLimit>PT15M</ExecutionTimeLimit>
+    <Hidden>false</Hidden>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{escape(str(program))}</Command>
+      <Arguments>{escape(arguments)}</Arguments>
+      <WorkingDirectory>{escape(str(workdir))}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"""
+
+
+def install_autostart(port: int, data_dir: Path) -> None:
+    if not WINDOWS:
+        raise SystemExit("--install-autostart uses the Windows Task Scheduler; on other systems use cron.")
+    # pythonw.exe runs without a console window, so nothing pops up every few minutes.
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    program = pythonw if pythonw.is_file() else Path(sys.executable)
+    arguments = subprocess.list2cmdline(
+        [str(Path(__file__).resolve()), "--watchdog", "--port", str(port), "--data-dir", str(data_dir)]
+    )
+    definition = data_dir / "watchdog-task.xml"
+    definition.write_text(watchdog_task_xml(program, arguments, ROOT, datetime.now()), encoding="utf-16")
+    result = subprocess.run(
+        ["schtasks", "/Create", "/TN", TASK_NAME, "/XML", str(definition), "/F"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(f"Could not create the scheduled task: {(result.stderr or result.stdout).strip()}")
+    print(f"Task     '{TASK_NAME}' runs every {WATCHDOG_MINUTES} minutes while you are signed in")
+    # Asleep, the PC cannot answer anyone; never sleeping on the charger is
+    # Windows' own setting (Settings > System > Power), so it is easy to undo.
+    subprocess.run(["powercfg", "/change", "standby-timeout-ac", "0"], capture_output=True)
+    print("Power    this PC no longer sleeps by itself while plugged in")
+    print("         (undo: powercfg /change standby-timeout-ac 30); closing the lid may still sleep it")
+    print(f"Log      {data_dir / 'logs' / 'watchdog.log'}")
+    print("Remove   .venv\\Scripts\\python scripts\\publish_demo.py --remove-autostart")
+
+
+def remove_autostart() -> None:
+    result = subprocess.run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"], capture_output=True, text=True)
+    print(f"Removed the scheduled task '{TASK_NAME}'." if result.returncode == 0
+          else f"No scheduled task '{TASK_NAME}' to remove.")
+
+
+def open_watchdog_log(logs: Path):
+    """The watchdog's log, appended to; started afresh once it passes 1 MB."""
+    log = logs / "watchdog.log"
+    if log.exists() and log.stat().st_size > 1_000_000:
+        log.replace(logs / "watchdog.old.log")
+    out = open(log, "a", encoding="utf-8", buffering=1)
+    out.write(f"\n--- {datetime.now():%Y-%m-%d %H:%M:%S}\n")
+    return out
 
 
 def main() -> None:
@@ -235,12 +347,34 @@ def main() -> None:
     parser.add_argument("--ngrok", type=Path, help="path to ngrok")
     parser.add_argument("--cloudflared", type=Path, help="path to cloudflared")
     parser.add_argument("--ssh", type=Path, help="path to the ssh client (for --localhost-run)")
+    parser.add_argument(
+        "--install-autostart", action="store_true",
+        help=f"Windows: run this script every {WATCHDOG_MINUTES} minutes in the background, "
+        "so the demo recovers on its own",
+    )
+    parser.add_argument("--remove-autostart", action="store_true", help="remove the scheduled task again")
+    parser.add_argument(
+        "--watchdog", action="store_true",
+        help="what the scheduled task runs: no console, output appended to logs/watchdog.log",
+    )
     args = parser.parse_args()
 
     data_dir = args.data_dir.resolve()
     logs = data_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     state_file = data_dir / "publish_demo.json"
+
+    if args.remove_autostart:
+        remove_autostart()
+        return
+    if args.install_autostart:
+        install_autostart(args.port, data_dir)
+        print("\nStarting the demo now as well:\n")
+    if args.watchdog:
+        global watchdog_log
+        watchdog_log = open_watchdog_log(logs)
+        # Errors land in the log too; the next run in a few minutes tries again.
+        sys.stdout = sys.stderr = watchdog_log
     state = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
     api_url = f"http://127.0.0.1:{args.port}"
 

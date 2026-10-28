@@ -1,7 +1,8 @@
 @echo off
-rem Start the MAIROS demo after a restart: the API on this PC and the ngrok
-rem tunnel behind https://mairos.vercel.app. Double-click this file, or put a
-rem shortcut to it in the Startup folder to run it at sign-in.
+rem Start the MAIROS demo now: the API on this PC and the tunnel behind
+rem https://mairos.vercel.app. After "publish_demo.py --install-autostart" a
+rem scheduled task does this every 5 minutes on its own; this file is for
+rem when you do not want to wait.
 title MAIROS demo
 cd /d "%~dp0.."
 ".venv\Scripts\python.exe" "scripts\publish_demo.py"

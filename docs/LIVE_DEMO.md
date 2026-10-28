@@ -1,9 +1,10 @@
 # The live demo: Vercel and this PC
 
-> **Moving off the PC (28 October 2026):** the owner chose to run the API on a
-> free Oracle Cloud VM so the site stays up without this PC. Once that is set up
-> (`docs/ORACLE_VM.md`), this page describes the old setup; do not run
-> `publish_demo.py` or Start MAIROS after the switch.
+> **28 October 2026:** the owner keeps the API on this PC and lets a watchdog
+> keep it up (below, *Keep it up on its own*). Running it on a free Oracle Cloud
+> VM instead, so the site works while this PC is off, is written up in
+> `docs/ORACLE_VM.md` for later; if that is ever set up, remove the watchdog
+> (`publish_demo.py --remove-autostart`) and stop using this page.
 
 MAIROS is on the internet at **https://mairos.vercel.app**. The website runs
 on Vercel; the API runs on the project owner's PC and is reached through a free
@@ -84,6 +85,36 @@ nothing and finishes in a few seconds.
 The script needs the Vercel CLI to be logged in to the account that owns the
 project. If it reports a failed `vercel` command, run `npx vercel login` in
 `apps/web` and run the script again.
+
+## Keep it up on its own
+
+Once, from `mairos/`:
+
+```powershell
+.venv\Scripts\python scripts\publish_demo.py --install-autostart
+```
+
+This adds a Windows scheduled task, **MAIROS demo**, that runs
+`publish_demo.py --watchdog` every 5 minutes while you are signed in, with no
+window. Each run takes a few seconds when everything answers; otherwise it
+starts the API, opens a new tunnel and redeploys the site with the new address
+(2-3 minutes). So after a restart, a sleep or a tunnel that moved, the site is
+back within about 5-10 minutes of the PC being on and signed in, with nothing
+to click. It also runs on battery, and it sets Windows to never sleep on its
+own while plugged in (`powercfg /change standby-timeout-ac 0`; undo with
+`powercfg /change standby-timeout-ac 30`). Closing the lid can still put a
+laptop to sleep, per its lid setting.
+
+The site still works only while this PC is on, awake and online; from then on,
+any laptop or phone can open https://mairos.vercel.app.
+
+| To | Run |
+|---|---|
+| See what the watchdog did | `mairos-deploy-data\logs\watchdog.log` |
+| Remove it | `.venv\Scripts\python scripts\publish_demo.py --remove-autostart` |
+
+The Vercel CLI's "Would you like to upgrade now?" question no longer appears:
+the script sets `NO_UPDATE_NOTIFIER`, as nobody is there to answer it.
 
 ## Before you share the link
 
