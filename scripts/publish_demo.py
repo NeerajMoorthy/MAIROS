@@ -28,7 +28,7 @@ changed (a minute or two): with ngrok, only the first time. A tunnel it started
 earlier that still answers is reused.
 
 `--install-autostart` (Windows) adds a scheduled task that runs this script
-every 5 minutes without a window (`--watchdog`): after a restart, a sleep or a
+every minute without a window (`--watchdog`): after a restart, a sleep or a
 dropped tunnel it brings the API and tunnel back and redeploys when the
 address changed, so the site recovers on its own while this PC is on.
 
@@ -71,7 +71,9 @@ TUNNEL_ADDRESS = re.compile(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com")
 # links to admin.localhost.run and localhost.run/docs, which are not tunnels.
 LHR_ADDRESS = re.compile(r"https://[a-z0-9-]+\.lhr\.life")
 TASK_NAME = "MAIROS demo"
-WATCHDOG_MINUTES = 5
+# A free localhost.run address can vanish after ~10 minutes; checking every
+# minute keeps the gap short. A run where everything answers takes a second.
+WATCHDOG_MINUTES = 1
 # Console programs started from pythonw.exe (the watchdog) would each flash a
 # window of their own.
 NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if WINDOWS else {}

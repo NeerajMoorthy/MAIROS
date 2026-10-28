@@ -1,7 +1,9 @@
 # The live demo: Vercel and this PC
 
 > **28 October 2026:** the owner keeps the API on this PC and lets a watchdog
-> keep it up (below, *Keep it up on its own*). Running it on a free Oracle Cloud
+> keep it up (below, *Keep it up on its own*), back on the **ngrok** fixed
+> domain: free localhost.run addresses vanished after about 10 minutes, and
+> each new address cost a redeploy and a few minutes of 502. Running it on a free Oracle Cloud
 > VM instead, so the site works while this PC is off, is written up in
 > `docs/ORACLE_VM.md` for later; if that is ever set up, remove the watchdog
 > (`publish_demo.py --remove-autostart`) and stop using this page.
@@ -95,12 +97,12 @@ Once, from `mairos/`:
 ```
 
 This adds a Windows scheduled task, **MAIROS demo**, that runs
-`publish_demo.py --watchdog` every 5 minutes while you are signed in, with no
+`publish_demo.py --watchdog` every minute while you are signed in, with no
 window. Each run takes a few seconds when everything answers; otherwise it
-starts the API, opens a new tunnel and redeploys the site with the new address
-(2-3 minutes). So after a restart, a sleep or a tunnel that moved, the site is
-back within about 5-10 minutes of the PC being on and signed in, with nothing
-to click. It also runs on battery, and it sets Windows to never sleep on its
+starts the API and reopens the tunnel; only a tunnel whose address changed
+(not ngrok's fixed domain) also needs the site redeployed (1-2 minutes). So
+after a restart or a sleep the site is back within a few minutes of the PC
+being on and signed in, with nothing to click. It also runs on battery, and it sets Windows to never sleep on its
 own while plugged in (`powercfg /change standby-timeout-ac 0`; undo with
 `powercfg /change standby-timeout-ac 30`). Closing the lid can still put a
 laptop to sleep, per its lid setting.
