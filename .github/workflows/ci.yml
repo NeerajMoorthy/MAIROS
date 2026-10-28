@@ -32,8 +32,13 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/requirements.txt
 
+      # CPU-only PyTorch first, as in apps/api/Dockerfile: sentence-transformers
+      # would otherwise pull the CUDA build, several gigabytes that no longer
+      # fit on the runner's disk ("No space left on device").
       - name: Install dependencies
-        run: pip install -r apps/api/requirements.txt
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -r apps/api/requirements.txt
 
       # The suite is deliberately offline: no API key, no model download and no
       # network are configured here, so a test that starts reaching out fails
