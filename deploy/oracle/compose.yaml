@@ -1,0 +1,47 @@
+# MAIROS API on an always-on VM (Oracle Cloud Always Free), behind Caddy.
+#
+# Caddy gets a Let's Encrypt certificate for $DOMAIN on its own; with no
+# domain of your own, <public-ip>.sslip.io resolves to the VM and works.
+# Both containers restart with Docker, so the API comes back after a reboot.
+#
+#   docker compose up -d --build     # from deploy/oracle/ (setup.sh does this)
+#
+# See docs/ORACLE_VM.md for the whole sequence.
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    # The repository's .env (GROQ_API_KEY and the rest), as on the PC.
+    env_file: ../../.env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ${DATA_PATH:-../../../mairos-data}:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  caddy:
+    image: caddy:2
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/oracle/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

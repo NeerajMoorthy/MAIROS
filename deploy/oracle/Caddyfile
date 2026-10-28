@@ -1,0 +1,5 @@
+# HTTPS for the MAIROS API. The website (Vercel) forwards /api/* here.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:8000
+}
