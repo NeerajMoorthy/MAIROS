@@ -129,6 +129,7 @@ class RetrievalEvaluator:
         golden_set: GoldenSet | None = None,
         k: int = 5,
         answer_fn: AnswerFn | None = None,
+        judge_embeddings=None,
     ):
         self.retrieve_fn = retrieve_fn
         self.corpus_fn = corpus_fn
@@ -138,6 +139,9 @@ class RetrievalEvaluator:
         # it (or without ragas and a live model) the report says so and shows
         # no number, which is the default.
         self.answer_fn = answer_fn
+        # ``texts -> vectors`` for RAGAS; the vector store's embedder is reused
+        # so the model is not loaded twice.
+        self.judge_embeddings = judge_embeddings
 
     # ------------------------------------------------------------------
     def _relevant_ids(self, case: TestCase, corpus: Sequence[dict]) -> set[str]:
@@ -205,7 +209,10 @@ class RetrievalEvaluator:
         if not report.available:
             return report
 
-        return score_samples(build_samples(list(self.golden_set), self.answer_fn))
+        return score_samples(
+            build_samples(list(self.golden_set), self.answer_fn),
+            embeddings=self.judge_embeddings,
+        )
 
     # ------------------------------------------------------------------
     def run(self) -> EvalReport:

@@ -630,10 +630,11 @@ no human chunk-level labels — the policy is named in the UI rather than passed
 off as a human judgment. A case can instead declare `source_documents` for
 exact document-level labels, which take priority when present.
 
-**When RAGAS is unavailable** — it is an optional dependency — the dashboard
+**When RAGAS is unavailable** — not installed, or no live model — the dashboard
 says so plainly, lists the four answer-quality metrics it *would* compute, and
 shows an em dash instead of a number. Retrieval metrics need no LLM and are
-unaffected. Install with `pip install "ragas>=0.2,<1"` to enable the rest.
+unaffected. RAGAS is in `apps/api/requirements.txt`; it judges with the
+configured Groq model and the local embedder, never OpenAI.
 
 ---
 

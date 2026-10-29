@@ -351,6 +351,152 @@ class TestAnswerQuality:
 
 
 # ---------------------------------------------------------------------------
+# RAGAS judging with MAIROS's own model and embedder
+# ---------------------------------------------------------------------------
+class _FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def to_pandas(self):
+        rows = self._rows
+
+        class _Frame:
+            def to_dict(self, orient):
+                assert orient == "records"
+                return rows
+
+        return _Frame()
+
+
+@pytest.fixture()
+def fake_ragas(monkeypatch):
+    """A stand-in ``ragas`` that records what evaluate() was given."""
+    import sys
+    import types
+
+    from services.evaluation import ragas_runner
+
+    monkeypatch.setattr(ragas_runner, "ragas_installed", lambda: True)
+    monkeypatch.setattr(ragas_runner, "llm_is_live", lambda: True)
+
+    calls: dict = {"rows": []}
+
+    def evaluate(dataset, metrics=None, llm=None, embeddings=None, run_config=None, **kwargs):
+        calls.update(dataset=dataset, metrics=metrics, llm=llm, embeddings=embeddings, run_config=run_config)
+        return _FakeResult(calls["rows"])
+
+    module = types.ModuleType("ragas")
+    module.evaluate = evaluate
+    module.RunConfig = lambda **kwargs: kwargs
+    module.EvaluationDataset = types.SimpleNamespace(from_list=lambda rows: rows)
+    metrics = types.ModuleType("ragas.metrics")
+    for name in ragas_runner.METRIC_NAMES:
+        setattr(metrics, name, name)
+    monkeypatch.setitem(sys.modules, "ragas", module)
+    monkeypatch.setitem(sys.modules, "ragas.metrics", metrics)
+    return calls
+
+
+def _sample(question, answer="an answer", contexts=("a passage",)):
+    return {"question": question, "answer": answer, "contexts": list(contexts), "ground_truth": "truth"}
+
+
+class TestRagasJudge:
+    def test_judges_with_the_given_model_and_the_local_embedder(self, fake_ragas):
+        """Left to itself RAGAS judges with OpenAI, which MAIROS has no key for,
+        so every run failed even with ragas installed."""
+        from services.evaluation.ragas_runner import score_samples
+
+        judge = object()
+        fake_ragas["rows"] = [{m: 0.5 for m in ("faithfulness", "answer_relevancy", "context_precision", "context_recall")}]
+
+        report = score_samples([_sample("q1")], llm=judge, embeddings=lambda texts: [[1, 2]] * len(texts))
+
+        assert report.available is True
+        assert fake_ragas["llm"] is judge
+        assert fake_ragas["embeddings"].embed_query("hello") == [1.0, 2.0]
+        assert fake_ragas["embeddings"].embed_documents(["a", "b"]) == [[1.0, 2.0], [1.0, 2.0]]
+        assert fake_ragas["run_config"]["max_workers"] <= 4, "stay inside Groq's request rate"
+        assert fake_ragas["dataset"] == [
+            {"user_input": "q1", "response": "an answer", "retrieved_contexts": ["a passage"], "reference": "truth"}
+        ]
+
+    def test_scores_are_the_mean_of_the_judgements_that_succeeded(self, fake_ragas):
+        """RAGAS returns its results as a table, with NaN for a failed
+        judgement. The old code read them with .get(), which RAGAS's result has
+        not got, so even a good run reported no scores."""
+        from services.evaluation.ragas_runner import score_samples
+
+        nan = float("nan")
+        fake_ragas["rows"] = [
+            {"faithfulness": 1.0, "answer_relevancy": 0.8, "context_precision": nan, "context_recall": 0.5},
+            {"faithfulness": 0.5, "answer_relevancy": nan, "context_precision": nan, "context_recall": 1.0},
+        ]
+
+        report = score_samples([_sample("q1"), _sample("q2")], llm=object(), embeddings=lambda t: [[0.0]] * len(t))
+
+        assert report.scores == {"faithfulness": 0.75, "answer_relevancy": 0.8, "context_recall": 0.75}
+        assert [case["question"] for case in report.per_case] == ["q1", "q2"]
+        assert report.per_case[1]["answer_relevancy"] is None
+        assert report.judged_by is not None
+
+    def test_cases_without_passages_are_skipped_not_judged(self, fake_ragas):
+        from services.evaluation.ragas_runner import score_samples
+
+        fake_ragas["rows"] = [{"faithfulness": 1.0}]
+        samples = [_sample("q1"), _sample("q2", answer="", contexts=()), _sample("q3", contexts=())]
+
+        report = score_samples(samples, llm=object(), embeddings=lambda t: [[0.0]] * len(t))
+
+        assert [row["user_input"] for row in fake_ragas["dataset"]] == ["q1"]
+        assert "2 skipped" in report.note
+
+    def test_nothing_to_judge_is_reported(self, fake_ragas):
+        from services.evaluation.ragas_runner import score_samples
+
+        report = score_samples([_sample("q1", answer="", contexts=())], llm=object())
+        assert report.available is False
+        assert report.reason == "no_samples"
+        assert "dataset" not in fake_ragas, "ragas must not be called with nothing to judge"
+
+    def test_every_judgement_failing_shows_no_score(self, fake_ragas):
+        from services.evaluation.ragas_runner import score_samples
+
+        nan = float("nan")
+        fake_ragas["rows"] = [{name: nan for name in ("faithfulness", "answer_relevancy")}]
+
+        report = score_samples([_sample("q1")], llm=object(), embeddings=lambda t: [[0.0]] * len(t))
+        assert report.available is False
+        assert report.scores is None
+        assert report.reason == "no_scores_returned"
+
+    def test_the_real_ragas_accepts_the_judge_without_openai(self, monkeypatch):
+        """Runs only where ragas is installed (CI installs the requirements).
+        A judge that always errors must end in "no scores", not in RAGAS
+        asking for an OpenAI key."""
+        pytest.importorskip("ragas")
+        from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+        from services.evaluation import ragas_runner
+
+        monkeypatch.setattr(ragas_runner, "llm_is_live", lambda: True)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        class BrokenJudge(FakeListChatModel):
+            def _call(self, *args, **kwargs):
+                raise RuntimeError("judge unavailable")
+
+        report = ragas_runner.score_samples(
+            [_sample("What is retrieval-augmented generation?")],
+            llm=BrokenJudge(responses=["unused"]),
+            embeddings=lambda texts: [[0.1, 0.2, 0.3]] * len(texts),
+        )
+
+        assert report.available is False
+        assert report.reason == "no_scores_returned", report.note
+
+
+# ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
 class TestEvaluationAPI:

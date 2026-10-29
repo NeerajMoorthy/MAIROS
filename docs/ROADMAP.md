@@ -65,11 +65,10 @@ that ceiling.)
 | Item | What it needs |
 |---|---|
 | Live-model validation figures | 15–20 real, text-based PDFs on one topic, a live `GROQ_API_KEY`, then `python scripts/live_validation.py --corpus <folder> --out docs/results_data.json --markdown docs/results_summary.md`. Paste the table into section 2 of `docs/RESULTS.md` with date, model and corpus. |
-| RAGAS figures | `pip install "ragas>=0.2,<1"`, then one evaluation run with `answer_quality: true` on that corpus. |
+| RAGAS figures | One evaluation run with `answer_quality: true` on that corpus (RAGAS is in `apps/api/requirements.txt`). |
 | A full manual pass of the latest build | Follow `docs/SAMPLE_PROJECT_WALKTHROUGH.md` on the live demo or locally, and fill in its checklist. |
 | A multi-user deployment | Your Supabase, Fly.io and Cloudflare accounts; follow `docs/DEPLOYMENT.md`. The single-user demo is already live (`docs/LIVE_DEMO.md`). |
 | CI running for real | The project is a local git repository from 25 October 2026. Push it to a GitHub repository and `.github/workflows/ci.yml` runs both suites, the type check and the build on every push. |
-| RAGAS in the project's own environment | RAGAS is installed in the system Python but not in `mairos/.venv`, which the API runs from: `.venv\Scripts\python.exe -m pip install "ragas>=0.2,<1"`. |
 
 ## Project-wide data export — built
 
