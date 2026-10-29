@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProjectWorkspace from "@/app/projects/[projectId]/page";
 import { ApiError, api } from "@/lib/api";
@@ -24,6 +24,11 @@ vi.mock("@/components/SearchUpload", () => ({ SearchUpload: () => null }));
 vi.mock("@/components/WorkflowPanel", () => ({ WorkflowPanel: () => null }));
 
 const mocked = api as unknown as Record<string, ReturnType<typeof vi.fn>>;
+
+beforeEach(() => {
+  // Not the example project: no "Use example" inputs.
+  mocked.exampleWorkspace.mockRejectedValue(new Error("not needed here"));
+});
 
 describe("Project workspace route", () => {
   it("shows a project loading failure and lets the user retry", async () => {

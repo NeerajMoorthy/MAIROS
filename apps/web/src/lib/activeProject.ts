@@ -33,3 +33,12 @@ export function forgetActiveProjectId(projectId: string): void {
     /* storage unavailable */
   }
 }
+
+/** Forget whichever project is remembered (after the workspace is cleared). */
+export function clearActiveProjectId(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}

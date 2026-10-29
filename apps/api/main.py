@@ -33,6 +33,7 @@ from app.routers import (
     projects,
     query,
     tasks,
+    workspace,
 )
 from app.store import metadata_store
 
@@ -113,7 +114,7 @@ install_error_handlers(app)
 # enabled it verifies the caller and checks project ownership from the path —
 # the one place isolation is enforced (see app/auth.py). The health probes
 # below are deliberately outside it.
-for router in (projects, ingest, query, graph, chat, tasks, evaluation, patents):
+for router in (projects, ingest, query, graph, chat, tasks, evaluation, patents, workspace):
     app.include_router(router.router, prefix="/api", dependencies=[Depends(authorize)])
 
 

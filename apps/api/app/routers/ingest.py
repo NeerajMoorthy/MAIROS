@@ -40,6 +40,60 @@ def _discard(path: Path) -> None:
         logger.warning("could not remove the rejected upload %s", path.name, exc_info=True)
 
 
+class NoTextError(Exception):
+    """The PDF opened but held no extractable text (a scan)."""
+
+
+def index_pdf(project_id: str, filename: str, content: bytes) -> dict:
+    """Store an uploaded PDF, extract, chunk and embed it, and register the
+    document. Returns the ingestion result; nothing is kept on failure.
+
+    Blocking: call it from a worker thread. Shared by the upload endpoint and
+    by Settings -> Load example data, so both index a paper the same way.
+    """
+    upload_dir = Path(settings.upload_dir) / project_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    # Stored under a generated name only. The original filename is kept in the
+    # document metadata; putting it in the path as well made a long name
+    # overflow Windows' 260-character path limit and fail the upload with a
+    # bare FileNotFoundError, and carried whatever characters the user's file
+    # name happened to contain onto the server's disk.
+    file_path = upload_dir / f"{uuid.uuid4().hex}.pdf"
+    file_path.write_bytes(content)
+
+    try:
+        pipeline = IngestionPipeline(
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+            chroma_store=get_chroma_store(),
+        )
+        result = pipeline.ingest(pdf_path=file_path, project_id=project_id, document_name=filename)
+    except Exception:
+        _discard(file_path)
+        raise
+
+    if result["num_chunks"] == 0:
+        # Nothing was indexed, so keep nothing: an orphaned upload would only
+        # be found again by project deletion.
+        _discard(file_path)
+        raise NoTextError(
+            "No text could be extracted from this PDF. It is probably a "
+            "scanned image — OCR is not part of the mid-review build."
+        )
+
+    metadata_store.add_document(
+        project_id=project_id,
+        document_id=result["document_id"],
+        filename=filename,
+        num_pages=result["num_pages"],
+        num_chunks=result["num_chunks"],
+        title=result.get("title") or filename,
+        # Which file on disk is this document's original, for the export.
+        metadata={"stored_file": file_path.name},
+    )
+    return result
+
+
 class IngestResponse(BaseModel):
     """Result of document ingestion."""
 
@@ -83,60 +137,19 @@ async def ingest_document(
             detail=f"File exceeds the {max_bytes // (1024 * 1024)} MB limit",
         )
 
-    upload_dir = Path(settings.upload_dir) / project_id
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    # Stored under a generated name only. The original filename is kept in the
-    # document metadata; putting it in the path as well made a long name
-    # overflow Windows' 260-character path limit and fail the upload with a
-    # bare FileNotFoundError, and carried whatever characters the user's file
-    # name happened to contain onto the server's disk.
-    file_path = upload_dir / f"{uuid.uuid4().hex}.pdf"
-    file_path.write_bytes(content)
-
-    # ---- Synchronous ingestion ---------------------------------------
     # Extraction and embedding are CPU-bound and synchronous. Run on the event
     # loop, they froze every other request — including the task polling the UI
     # does while an upload is in flight — for the whole of the embedding pass.
     try:
-        pipeline = IngestionPipeline(
-            chunk_size=settings.chunk_size,
-            chunk_overlap=settings.chunk_overlap,
-            chroma_store=get_chroma_store(),
-        )
-        result = await run_in_threadpool(
-            pipeline.ingest, pdf_path=file_path, project_id=project_id, document_name=filename
-        )
+        result = await run_in_threadpool(index_pdf, project_id, filename, content)
     except UnreadablePDFError as exc:
         # Not a PDF, damaged, or password-protected: the user's file, so a 400
         # with a message they can act on.
-        _discard(file_path)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NoTextError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        _discard(file_path)
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}") from exc
-
-    if result["num_chunks"] == 0:
-        # Nothing was indexed, so keep nothing: an orphaned upload would only
-        # be found again by project deletion.
-        _discard(file_path)
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "No text could be extracted from this PDF. It is probably a "
-                "scanned image — OCR is not part of the mid-review build."
-            ),
-        )
-
-    metadata_store.add_document(
-        project_id=project_id,
-        document_id=result["document_id"],
-        filename=filename,
-        num_pages=result["num_pages"],
-        num_chunks=result["num_chunks"],
-        title=result.get("title") or filename,
-        # Which file on disk is this document's original, for the export.
-        metadata={"stored_file": file_path.name},
-    )
 
     # ---- Background agent run ----------------------------------------
     task = metadata_store.create_task(

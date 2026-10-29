@@ -199,9 +199,11 @@ async def export_project(
     )
 
 
-@router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(project_id: str) -> None:
-    """Remove a project and its persisted metadata, index, graph, and files."""
+def remove_project(project_id: str) -> None:
+    """Delete a project's metadata, index, graph and files, or raise.
+
+    Shared by ``DELETE /projects/{id}`` and Settings -> Clear workspace.
+    """
     if not metadata_store.get_project(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -228,3 +230,9 @@ async def delete_project(project_id: str) -> None:
 
     if not metadata_store.delete_project(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+async def delete_project(project_id: str) -> None:
+    """Remove a project and its persisted metadata, index, graph, and files."""
+    remove_project(project_id)
