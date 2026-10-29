@@ -140,6 +140,7 @@ async def run_evaluation(project_id: str, request: EvaluationRunRequest) -> dict
         corpus_fn=corpus,
         k=request.k,
         answer_fn=answer if request.answer_quality else None,
+        judge_embeddings=store.embedding_function if request.answer_quality else None,
     )
 
     # Retrieval, RAGAS and the embedding model are all blocking; running them

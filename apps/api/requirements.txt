@@ -34,10 +34,11 @@ pyjwt[crypto]>=2.9,<3
 # postgres:// URL; SQLite stays the local default).
 psycopg[binary]>=3.2,<4
 
+# Answer-quality scores on the Evaluation page (faithfulness, answer
+# relevancy, context precision/recall). Judged by the Groq model above with the
+# local embedder; pinned to a minor version because its API moves between them.
+ragas>=0.4,<0.5
+
 # Testing
 pytest>=8,<9
 pytest-asyncio>=0.23,<2
-
-# Optional — RAGAS evaluation harness (services/evaluation).
-# Heavy dependency tree; install only when running evals:
-#   pip install "ragas>=0.2,<1"

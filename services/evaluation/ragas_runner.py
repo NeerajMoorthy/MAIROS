@@ -15,8 +15,9 @@ placeholder, or "estimated" score.
 from __future__ import annotations
 
 import importlib.util
+import math
 from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 METRIC_NAMES = [
     "faithfulness",
@@ -24,6 +25,13 @@ METRIC_NAMES = [
     "context_precision",
     "context_recall",
 ]
+
+# The judge writes structured verdicts, and a reasoning model spends part of
+# its budget thinking first; the agents' 1400-token cap cut verdicts short.
+JUDGE_MAX_TOKENS = 4096
+# Groq's free tier allows about 30 requests a minute, so a few judge calls at a
+# time, with patient retries, rather than RAGAS's default of 16.
+JUDGE_WORKERS = 3
 
 
 def ragas_installed() -> bool:
@@ -87,7 +95,8 @@ def unavailable_report() -> AnswerQualityReport:
         reason = "ragas_not_installed"
         note = (
             "RAGAS is not installed, so faithfulness and answer relevancy are not "
-            'measured. Install with `pip install "ragas>=0.2,<1"`.'
+            "measured. Install the backend requirements "
+            "(`pip install -r apps/api/requirements.txt`) and restart the API."
         )
     else:
         reason = "no_live_llm"
@@ -133,8 +142,63 @@ def build_samples(
     return samples
 
 
-def score_samples(samples: Sequence[dict]) -> AnswerQualityReport:
+def local_embeddings(embed: Callable[[list[str]], Any]):
+    """The project's own sentence-transformers embedder, in LangChain's shape.
+
+    RAGAS needs embeddings for answer relevancy and otherwise reaches for
+    OpenAI's, which MAIROS has no key for. Built on call so this module still
+    imports where LangChain is missing.
+    """
+    from langchain_core.embeddings import Embeddings
+
+    class LocalEmbeddings(Embeddings):
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return [[float(x) for x in vector] for vector in embed(list(texts))]
+
+        def embed_query(self, text: str) -> list[float]:
+            return self.embed_documents([text])[0]
+
+    return LocalEmbeddings()
+
+
+def default_judge_llm():
+    """The configured live model, set up to judge rather than to chat."""
+    from services.generation.provider import get_chat_model
+
+    return get_chat_model(temperature=0.0, max_tokens=JUDGE_MAX_TOKENS)
+
+
+def default_judge_embeddings():
+    """The same local embedder the vector store uses."""
+    from services.retrieval.vector_store import ChromaStore
+
+    return ChromaStore(persist_dir=".").embedding_function
+
+
+def _mean(values) -> float | None:
+    """Average of the scores RAGAS managed to produce (failed jobs are NaN)."""
+    numbers = []
+    for value in values:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isnan(number):
+            numbers.append(number)
+    return round(sum(numbers) / len(numbers), 4) if numbers else None
+
+
+def score_samples(
+    samples: Sequence[dict],
+    llm=None,
+    embeddings: Callable[[list[str]], Any] | None = None,
+) -> AnswerQualityReport:
     """Run RAGAS over prepared samples.
+
+    Args:
+        samples: Rows from :func:`build_samples`.
+        llm: LangChain chat model that judges; defaults to the live model.
+        embeddings: ``texts -> vectors``; defaults to the local embedder.
 
     Returns an unavailable report — never a fabricated one — when the
     dependency is missing, no model is live, there is nothing to score, or the
@@ -144,17 +208,22 @@ def score_samples(samples: Sequence[dict]) -> AnswerQualityReport:
     if not report.available:
         return report
 
-    if not samples:
+    # A case the project has no passages for has nothing to be faithful to;
+    # judging an empty answer against empty context only measures noise.
+    judgeable = [s for s in samples if s.get("answer") and s.get("contexts")]
+    if not judgeable:
         return AnswerQualityReport(
             available=False,
             scores=None,
             reason="no_samples",
-            note="No golden-set case produced an answer to judge.",
+            note=(
+                "No golden-set case produced an answer from this project's passages, "
+                "so there is nothing to judge."
+            ),
         )
 
     try:
-        from datasets import Dataset  # provided by ragas' own dependencies
-        from ragas import evaluate
+        from ragas import EvaluationDataset, RunConfig, evaluate
         from ragas.metrics import (
             answer_relevancy,
             context_precision,
@@ -162,40 +231,69 @@ def score_samples(samples: Sequence[dict]) -> AnswerQualityReport:
             faithfulness,
         )
 
+        dataset = EvaluationDataset.from_list(
+            [
+                {
+                    "user_input": s["question"],
+                    "response": s["answer"],
+                    "retrieved_contexts": list(s["contexts"]),
+                    "reference": s.get("ground_truth") or "",
+                }
+                for s in judgeable
+            ]
+        )
+        # Without an explicit judge and embedder RAGAS defaults to OpenAI.
         result = evaluate(
-            Dataset.from_list(list(samples)),
+            dataset,
             metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+            llm=llm if llm is not None else default_judge_llm(),
+            embeddings=local_embeddings(embeddings or default_judge_embeddings()),
+            run_config=RunConfig(max_workers=JUDGE_WORKERS, timeout=180, max_retries=6, max_wait=60),
+            show_progress=False,
         )
 
+        rows = result.to_pandas().to_dict("records")
         scores: dict[str, float] = {}
         for name in METRIC_NAMES:
-            value = result.get(name) if hasattr(result, "get") else None
-            if value is None:
-                continue
-            try:
-                scores[name] = round(float(value), 4)
-            except (TypeError, ValueError):
-                continue
+            value = _mean(row.get(name) for row in rows)
+            if value is not None:
+                scores[name] = value
 
         if not scores:
             return AnswerQualityReport(
                 available=False,
                 scores=None,
                 reason="no_scores_returned",
-                note="RAGAS ran but returned no usable scores, so none are shown.",
+                note=(
+                    "RAGAS ran but every judgement failed (often the model's rate "
+                    "limit), so no scores are shown."
+                ),
             )
+
+        per_case = [
+            {"question": sample["question"], **{name: _mean([row.get(name)]) for name in METRIC_NAMES}}
+            for sample, row in zip(judgeable, rows)
+        ]
 
         from services.generation.provider import describe_provider
 
+        skipped = len(samples) - len(judgeable)
         return AnswerQualityReport(
             available=True,
             scores=scores,
-            per_case=[],
+            per_case=per_case,
             judged_by=describe_provider().get("model"),
             reason="ok",
             note=(
-                "Model-judged scores over the golden set. These are one model's "
-                "assessment of another model's answers, not a computed quantity."
+                f"Model-judged scores over {len(judgeable)} golden-set "
+                f"case{'s' if len(judgeable) != 1 else ''}"
+                + (
+                    f" ({skipped} skipped: this project has no passages for them)"
+                    if skipped
+                    else ""
+                )
+                + ". These are one model's assessment of another model's answers, "
+                "not a computed quantity."
             ),
         )
 
@@ -213,6 +311,7 @@ __all__ = [
     "METRIC_NAMES",
     "build_samples",
     "llm_is_live",
+    "local_embeddings",
     "ragas_installed",
     "score_samples",
     "unavailable_report",
