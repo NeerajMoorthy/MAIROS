@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle2,
@@ -32,6 +33,8 @@ interface Props {
   documents: DocumentSummary[];
   onTaskStarted: (taskId: string) => void;
   onChanged: () => void;
+  /** In the example project: a topic with known results (Settings). */
+  exampleTopic?: string;
 }
 
 /** Where a paper link goes, in words. The backend only sends allowlisted hosts. */
@@ -44,7 +47,7 @@ function linkLabel(url: string): string {
 }
 
 /** Tab (a): the two entry points into the pipeline — topic search and PDF upload. */
-export function SearchUpload({ projectId, documents, onTaskStarted, onChanged }: Props) {
+export function SearchUpload({ projectId, documents, onTaskStarted, onChanged, exampleTopic }: Props) {
   const [topic, setTopic] = useState("");
   const [searching, setSearching] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
@@ -153,7 +156,12 @@ export function SearchUpload({ projectId, documents, onTaskStarted, onChanged }:
               <p className="font-medium">This project is empty — start with one of the two actions below.</p>
               <p className="mt-1 text-muted-foreground">
                 Search a topic to pull papers from arXiv, OpenAlex and Semantic Scholar, or upload a PDF to analyse a specific
-                document. Either one kicks off the multi-agent pipeline automatically.
+                document. Either one kicks off the multi-agent pipeline automatically. To look
+                around first, load the example data from{" "}
+                <Link href="/settings" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Settings
+                </Link>
+                .
               </p>
             </div>
           </CardContent>
@@ -199,6 +207,17 @@ export function SearchUpload({ projectId, documents, onTaskStarted, onChanged }:
               placeholder="e.g. retrieval augmented generation for scientific QA"
               disabled={searching}
             />
+            {exampleTopic && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTopic(exampleTopic)}
+                disabled={searching}
+                aria-label="Use the example topic"
+              >
+                <Sparkles /> Use example
+              </Button>
+            )}
             <Button type="submit" disabled={searching || !topic.trim()}>
               {searching ? <Loader2 className="animate-spin" /> : <Search />}
               Search

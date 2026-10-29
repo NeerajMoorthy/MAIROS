@@ -219,6 +219,32 @@ def dispatch_pipeline(
     ).start()
 
 
+def dispatch_pipelines_in_order(
+    background_tasks: BackgroundTasks,
+    runs: list[tuple[str, str, str, str | None, str | None]],
+) -> None:
+    """Start several runs, one after another, without holding up the response.
+
+    Each run is ``(task_id, question, project_id, flow, document_id)``. One at
+    a time rather than all at once: the free model tier allows a few thousand
+    tokens a minute, and parallel runs would mostly be spent waiting on it.
+    """
+    if settings.run_tasks_inline:
+        for args in runs:
+            background_tasks.add_task(run_pipeline, *args)
+        return
+
+    async def run_all() -> None:
+        for args in runs:
+            await run_pipeline(*args)
+
+    threading.Thread(
+        target=lambda: asyncio.run(run_all()),
+        name=f"mairos-tasks-{len(runs)}",
+        daemon=True,
+    ).start()
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------

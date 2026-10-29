@@ -15,6 +15,7 @@ import {
   Library,
   ScrollText,
   SearchX,
+  Sparkles,
 } from "lucide-react";
 
 import { PatentDisclaimer } from "@/components/patents/PatentDisclaimer";
@@ -36,6 +37,8 @@ import { describeError } from "@/lib/errorMessage";
 interface Props {
   projectId: string;
   onTaskStarted?: (taskId: string) => void;
+  /** In the example project: an input per flow with a known answer (Settings). */
+  examples?: Record<string, string>;
 }
 
 interface WorkflowSpec {
@@ -130,7 +133,7 @@ const WORKFLOWS: WorkflowSpec[] = [
 ];
 
 /** Tab: run a research workflow through the orchestrator and see its output. */
-export function WorkflowPanel({ projectId, onTaskStarted }: Props) {
+export function WorkflowPanel({ projectId, onTaskStarted, examples }: Props) {
   const [questions, setQuestions] = useState<Record<string, string>>({});
   const [activeFlow, setActiveFlow] = useState<string | null>(null);
   const [task, setTask] = useState<Task | null>(null);
@@ -204,6 +207,17 @@ export function WorkflowPanel({ projectId, onTaskStarted }: Props) {
         const onChange = (
           event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
         ) => setQuestions((prev) => ({ ...prev, [spec.flow]: event.target.value }));
+        const example = examples?.[spec.flow];
+        const useExample = example ? (
+          <Button
+            variant="outline"
+            onClick={() => setQuestions((prev) => ({ ...prev, [spec.flow]: example }))}
+            disabled={running}
+            aria-label={`Use the example input for ${spec.title}`}
+          >
+            <Sparkles /> Use example
+          </Button>
+        ) : null;
         return (
           <Card key={spec.flow}>
             <CardHeader className="pb-3">
@@ -241,10 +255,13 @@ export function WorkflowPanel({ projectId, onTaskStarted }: Props) {
                         ? `${value.trim().length} / ${MIN_DESCRIPTION_CHARS} characters minimum`
                         : `${value.trim().length} characters`}
                     </p>
-                    <Button onClick={() => start(spec)} disabled={running || tooShort}>
-                      {running ? <Loader2 className="animate-spin" /> : <Play />}
-                      Review project
-                    </Button>
+                    <div className="flex gap-2">
+                      {useExample}
+                      <Button onClick={() => start(spec)} disabled={running || tooShort}>
+                        {running ? <Loader2 className="animate-spin" /> : <Play />}
+                        Review project
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -256,6 +273,7 @@ export function WorkflowPanel({ projectId, onTaskStarted }: Props) {
                     placeholder={spec.placeholder}
                     disabled={running}
                   />
+                  {useExample}
                   <Button onClick={() => start(spec)} disabled={running}>
                     {running ? <Loader2 className="animate-spin" /> : <Play />}
                     Run

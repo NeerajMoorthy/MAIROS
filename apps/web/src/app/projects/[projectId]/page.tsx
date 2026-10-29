@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import {
@@ -21,7 +21,7 @@ import { WorkflowPanel } from "@/components/WorkflowPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setActiveProjectId } from "@/lib/activeProject";
-import { api, type ProjectDetail, type ProjectStats } from "@/lib/api";
+import { api, type ExampleWorkspaceInfo, type ProjectDetail, type ProjectStats } from "@/lib/api";
 import { describeError } from "@/lib/errorMessage";
 
 const TABS = [
@@ -60,6 +60,7 @@ export default function ProjectWorkspace() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [tab, setTab] = useState("search");
   const [exportOpen, setExportOpen] = useState(false);
+  const [exampleInfo, setExampleInfo] = useState<ExampleWorkspaceInfo | null>(null);
   const exportButton = useRef<HTMLButtonElement>(null);
   const refreshGeneration = useRef(0);
 
@@ -128,6 +129,31 @@ export default function ProjectWorkspace() {
       window.clearInterval(timer);
     };
   }, [projectId]);
+
+  // The example project (Settings -> Load example data) gets "Use example"
+  // inputs on its workflow cards and topic search.
+  const isExample = project !== null && exampleInfo !== null && project.name === exampleInfo.name;
+  useEffect(() => {
+    let cancelled = false;
+    api.exampleWorkspace().then(
+      (info) => {
+        if (!cancelled) setExampleInfo(info);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const examples = useMemo(() => {
+    if (!isExample || !exampleInfo) return undefined;
+    return Object.fromEntries(
+      exampleInfo.guide.filter((step) => step.flow).map((step) => [step.flow as string, step.input]),
+    );
+  }, [isExample, exampleInfo]);
+  const exampleTopic = isExample
+    ? exampleInfo?.guide.find((step) => step.feature === "Topic search")?.input
+    : undefined;
 
   /**
    * Called when a panel starts a pipeline run. The panel follows the run
@@ -233,6 +259,7 @@ export default function ProjectWorkspace() {
             documents={project?.documents ?? []}
             onTaskStarted={handleTaskStarted}
             onChanged={refresh}
+            exampleTopic={exampleTopic}
           />
         </TabsContent>
 
@@ -241,7 +268,7 @@ export default function ProjectWorkspace() {
         </TabsContent>
 
         <TabsContent value="workflows" className="min-h-0 flex-1 overflow-auto px-4 pb-6 sm:px-6">
-          <WorkflowPanel projectId={projectId} />
+          <WorkflowPanel projectId={projectId} examples={examples} />
         </TabsContent>
 
         <TabsContent value="graph" className="mt-0 min-h-0 flex-1">

@@ -57,6 +57,42 @@ export interface Paper {
   added_at: string;
 }
 
+/** Settings -> Example workspace: one thing to try, with an input that has a known answer. */
+export interface ExampleGuideStep {
+  feature: string;
+  /** Workspace tab ("search", "chat", "workflows") or "patents". */
+  where: string;
+  /** The workflow card this input belongs to, when `where` is "workflows". */
+  flow: string | null;
+  input: string;
+  expect: string;
+}
+
+export interface ExampleWorkspaceInfo {
+  name: string;
+  description: string;
+  files: { name: string; description: string }[];
+  guide: ExampleGuideStep[];
+}
+
+export interface ExampleWorkspaceLoaded {
+  project_id: string;
+  name: string;
+  documents: {
+    document_id: string;
+    filename: string;
+    num_pages: number;
+    num_chunks: number;
+    task_id: string;
+  }[];
+  patent_id: string;
+  /** Previous example projects that this load replaced. */
+  replaced: number;
+}
+
+/** What `clearWorkspace` must send; the API refuses the request without it. */
+export const CLEAR_WORKSPACE_CONFIRMATION = "delete-everything";
+
 export interface RetrievalResult {
   chunk_id: string;
   document_id: string;
@@ -758,6 +794,20 @@ export const api = {
       `/projects/${projectId}/evaluation/run`,
       json({ k, answer_quality: answerQuality }),
     ),
+
+  // -- Settings: example workspace ------------------------------------
+  exampleWorkspace: () => request<ExampleWorkspaceInfo>("/workspace/example"),
+  /** Create (or replace) the example project; its analysis runs continue in the background. */
+  loadExampleWorkspace: () =>
+    request<ExampleWorkspaceLoaded>("/workspace/example", { method: "POST" }),
+  /** Delete every project the caller can see. Irreversible. */
+  clearWorkspace: () =>
+    request<{ deleted: number }>(
+      `/workspace?confirm=${CLEAR_WORKSPACE_CONFIRMATION}`,
+      { method: "DELETE" },
+    ),
+  downloadSampleFile: (name: string) =>
+    download(`/workspace/example/files/${encodeURIComponent(name)}`, name),
 
   // -- Upload with real progress (fetch has no upload-progress event) ---
   uploadDocumentWithProgress: async (

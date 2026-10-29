@@ -38,6 +38,14 @@ machine at http://localhost:3000 (README, *Run it*). The steps are the same.
 All in `mairos/output/sample-project/`. To recreate them:
 `.venv\Scripts\python scripts\generate_sample_project.py`.
 
+They are also in the app: **Settings → Sample files** downloads each one, and
+**Settings → Load example data** creates the project *RailGuard Lite
+(example)* with the three papers already indexed and the patent stored, plus a
+*Try every feature* list with an input for each feature. That is the quick way
+to look around; this walkthrough still starts from an empty project so that
+the upload steps are tested too. **Settings → Clear workspace** deletes every
+project after a confirmation.
+
 | File | What it is | Used in |
 |---|---|---|
 | `paper-a-camera-cnn.pdf` | *Lightweight CNN Crack Detection on Rail Heads*: camera images and a small neural network on a single-board computer. 2 pages. | Part 2 onwards |

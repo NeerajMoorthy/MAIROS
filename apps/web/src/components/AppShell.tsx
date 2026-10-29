@@ -10,6 +10,7 @@ import {
   FolderKanban,
   PanelsTopLeft,
   ScrollText,
+  Settings,
 } from "lucide-react";
 
 import { SystemNotice } from "@/components/SystemNotice";
@@ -73,6 +74,12 @@ const NAV: NavItem[] = [
     icon: FlaskConical,
     href: "/evaluation",
     isActive: (pathname) => pathname.startsWith("/evaluation"),
+  },
+  {
+    label: "Settings",
+    icon: Settings,
+    href: "/settings",
+    isActive: (pathname) => pathname.startsWith("/settings"),
   },
 ];
 

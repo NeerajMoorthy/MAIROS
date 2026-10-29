@@ -25,6 +25,33 @@ beforeEach(() => {
 });
 
 describe("WorkflowPanel", () => {
+  it("offers no example inputs outside the example project", async () => {
+    render(<WorkflowPanel projectId="p1" />);
+
+    await screen.findByText("Compare papers");
+    expect(screen.queryByRole("button", { name: /use the example input/i })).not.toBeInTheDocument();
+  });
+
+  it("fills a card with its example input in the example project", async () => {
+    mocked.createTask.mockResolvedValue(aTask({ id: "t-ex", status: "queued" }));
+    mocked.getTask.mockResolvedValue(aTask({ id: "t-ex", status: "queued" }));
+    render(
+      <WorkflowPanel
+        projectId="p1"
+        examples={{ experiment: "Budget: one 500 m test track, two weeks, no cloud computing." }}
+      />,
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /use the example input for design experiments/i }),
+    );
+
+    const input = screen.getByRole("textbox", { name: /design experiments/i });
+    expect(input).toHaveValue("Budget: one 500 m test track, two weeks, no cloud computing.");
+    // Only the cards with an example get the button.
+    expect(screen.getAllByRole("button", { name: /use the example input/i })).toHaveLength(1);
+  });
+
   it("offers every research workflow", async () => {
     render(<WorkflowPanel projectId="p1" />);
 
