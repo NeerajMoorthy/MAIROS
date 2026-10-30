@@ -6,11 +6,15 @@ venv/
 .pytest_cache/
 .pytest-temp*/
 .ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # Environment — never commit real API keys
 .env
 .env.local
 .env.*.local
+.env.*
 !.env.example
 
 # Runtime data (Chroma index, knowledge graphs, uploads, state snapshot)
@@ -28,6 +32,8 @@ node_modules/
 .vercel/
 .dev.vars
 out/
+dist/
+coverage/
 npm-debug.log*
 *.tsbuildinfo
 
@@ -37,14 +43,24 @@ tmp/**/*.png
 tmp/**/*.webp
 tmp/**/*.pptx
 tmp/**/*.ndjson
+tmp/presentation-build-*/
 
 # Logs and local databases outside apps/api/data
 *.log
 *.db-wal
 *.db-shm
+*.db
+*.sqlite
 
 # Editors / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Temp and backup files
+*.tmp
+*.bak
+*~
+*.swp
